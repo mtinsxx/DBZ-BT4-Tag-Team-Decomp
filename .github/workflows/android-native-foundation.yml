@@ -1,0 +1,46 @@
+name: Android native foundation
+
+on:
+  push:
+    branches:
+      - 'feature/android-*'
+    paths:
+      - 'android/**'
+      - 'port/src/gs/android_touch.*'
+      - 'port/src/gs/gs_input.c'
+      - '.github/workflows/android-native-foundation.yml'
+  pull_request:
+    paths:
+      - 'android/**'
+      - 'port/src/gs/android_touch.*'
+      - 'port/src/gs/gs_input.c'
+      - '.github/workflows/android-native-foundation.yml'
+
+jobs:
+  host-input-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure
+        run: cmake -S android -B build/android-host -DCMAKE_BUILD_TYPE=Debug
+      - name: Compile
+        run: cmake --build build/android-host --parallel
+      - name: Test input bridge
+        run: ctest --test-dir build/android-host --output-on-failure
+
+  android-arm64-compile:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Discover Android NDK
+        run: |
+          NDK_DIR="$(find "$ANDROID_HOME/ndk" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)"
+          test -f "$NDK_DIR/build/cmake/android.toolchain.cmake"
+          echo "ANDROID_NDK_HOME=$NDK_DIR" >> "$GITHUB_ENV"
+      - name: Configure ARM64 input library
+        run: |
+          cmake -S android -B build/android-arm64 \
+            -DCMAKE_TOOLCHAIN_FILE="$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake" \
+            -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-28
+      - name: Compile ARM64 input library
+        run: cmake --build build/android-arm64 --parallel
