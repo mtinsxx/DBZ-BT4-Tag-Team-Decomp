@@ -28,6 +28,13 @@ if(ANDROID)
     target_include_directories(bt4_android_window PRIVATE ../port/src)
     target_link_libraries(bt4_android_window PUBLIC bt4_android_address ${CMAKE_DL_LIBS})
     target_compile_features(bt4_android_window PRIVATE c_std_99)
+
+    # Compile the ACTUAL engine memory source for Android. Linking it to
+    # the complete game still depends on generated game objects and the
+    # address-space 271 LLVM transformation.
+    add_library(bt4_android_memory OBJECT ../port/src/plat_mem.c)
+    target_include_directories(bt4_android_memory PRIVATE ../port/src include)
+    target_compile_features(bt4_android_memory PRIVATE c_std_99)
     if(CMAKE_C_COMPILER_ID MATCHES "Clang|GNU")
         target_compile_options(bt4_android_window PRIVATE -Wall -Wextra -Werror)
     endif()
