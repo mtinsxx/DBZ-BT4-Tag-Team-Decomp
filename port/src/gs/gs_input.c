@@ -21,6 +21,9 @@
 #include "gs_internal.h"
 #include "ui.h"
 #include "presentation.h"
+#ifdef __ANDROID__
+#include "android_touch.h"
+#endif
 
 int gPortOverlayOpen, gPortInputCapture, gPortChatTyping;
 extern int Port_Setting(const char *name, int def); /* plat_settings.c */
@@ -1173,6 +1176,25 @@ int Port_PadRead(int socket, unsigned char *data) {
     if (!gPortOverlayOpen && !gPortChatTyping && !sKeySwallow) btn |= sQuickPress[socket];
     sQuickPress[socket] = 0;
     SDL_UnlockSpinlock(&sQuickPressLock);
+#ifdef __ANDROID__
+    /* Android's gameplay overlay produces actual libpad2 button/stick state,
+       not fake key events. Merge it before existing game filters, recording,
+       spectator handling and rollback serialization. Physical pads still work. */
+    if (!gPortOverlayOpen && !gPortInputCapture && !gPortChatTyping) {
+        Bt4TouchPad touch;
+        if (Bt4Touch_Read(socket, &touch)) {
+            btn |= touch.buttons;
+            if (touch.active_axes & BT4_TOUCH_LEFT_AXIS) {
+                lx = touch.lx;
+                ly = touch.ly;
+            }
+            if (touch.active_axes & BT4_TOUCH_RIGHT_AXIS) {
+                rx = touch.rx;
+                ry = touch.ry;
+            }
+        }
+    }
+#endif
     if (socket == 0 && getenv("BT3_STICK_TEST") != NULL) { /* the numbers, once: what was read, what was passed, what the game has */
         static const char *const dirs[5] = {"-", "up", "down", "left", "right"};
         extern unsigned char gPad[]; /* the game's (include/sys/pad.h): 0x130 left x, y, 0x138 right x, y, 0x148 held */
