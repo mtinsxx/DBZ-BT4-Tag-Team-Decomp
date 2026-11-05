@@ -21,6 +21,18 @@ if(CMAKE_C_COMPILER_ID MATCHES "Clang|GNU")
     target_compile_options(bt4_android_address PRIVATE -Wall -Wextra -Werror)
 endif()
 
+# The ARM64 runtime adapter resolves Port_Window from the actual loaded
+# ELF image. No low-address mapping assumptions or ASLR disablement.
+if(ANDROID)
+    add_library(bt4_android_window STATIC src/bt4_window_runtime.c)
+    target_include_directories(bt4_android_window PRIVATE ../port/src)
+    target_link_libraries(bt4_android_window PUBLIC bt4_android_address ${CMAKE_DL_LIBS})
+    target_compile_features(bt4_android_window PRIVATE c_std_99)
+    if(CMAKE_C_COMPILER_ID MATCHES "Clang|GNU")
+        target_compile_options(bt4_android_window PRIVATE -Wall -Wextra -Werror)
+    endif()
+endif()
+
 if(NOT ANDROID)
     enable_testing()
     add_executable(bt4_android_touch_tests tests/touch_test.c)
