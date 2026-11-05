@@ -13,6 +13,9 @@
  */
 #include "port_host.h"
 #include "port_addr.h"
+#ifdef __ANDROID__
+#include "../../android/include/bt4_address_window.h"
+#endif
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -28,7 +31,7 @@ static uint32_t sHeapNext = HEAP_FIRST, sHeapEnd = HEAP_END;
 
 /* The 64-bit builds (the game's pointers 4 bytes wide, ptr32.py) keep the port's blocks for the game in a region of
    their own (Port_LowAlloc); the 32-bit build uses the C library's. */
-#if defined(__x86_64__) || defined(__APPLE__)
+#if defined(__x86_64__) || defined(__APPLE__) || defined(__ANDROID__)
 #define PORT_LOW_REGION 1
 #else
 #define PORT_LOW_REGION 0
@@ -276,10 +279,36 @@ int __wrap_main(int argc, char **argv) {
 }
 
 #else
-/* -------------------------------------------------------------------------------------------------------- Linux */
+/* ------------------------------------------------------------------------------------------------- Linux/Android */
 #include <sys/mman.h>
 #include <unistd.h>
 
+#ifdef __ANDROID__
+/* The Android linker loads a PIE .so. A game address is an OFFSET
+ * relative to Port_Window, not an address below 4 GiB. Exact, non-
+ * destructive mappings avoid clobbering the library or other mappings.
+ * If the ASLR-selected offsets are occupied, fail with a useful reason.
+ */
+#define STACK_BASE 0x02000000u
+#define STACK_SIZE 0x01000000u
+extern int Bt4Android_WindowConfigure(void);
+static void map(uint32_t addr, uint32_t size, const char *what) {
+    Bt4AddressWindow window;
+    void *mapped = NULL;
+    int result;
+    if (Bt4Android_WindowConfigure() != 0 ||
+        Bt4Addr_Init(&window, PORT_WINDOW) != BT4_ADDR_OK) {
+        fprintf(stderr, "bt4 android: cannot initialize guest address window for %s\n", what);
+        exit(2);
+    }
+    result = Bt4Addr_MapWritable(&window, addr, size, &mapped);
+    if (result != BT4_ADDR_OK) {
+        fprintf(stderr, "bt4 android: cannot reserve %s at window + 0x%08X (error %d)\n",
+                what, addr, result);
+        exit(2);
+    }
+}
+#else
 static void map(uint32_t addr, uint32_t size, const char *what) {
     void *p = mmap((void *)(uintptr_t)addr, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED_NOREPLACE,
                    -1, 0);
@@ -289,6 +318,7 @@ static void map(uint32_t addr, uint32_t size, const char *what) {
         exit(2);
     }
 }
+#endif
 
 static void map_heap(void) {
     map(HEAP_BASE, HEAP_END - HEAP_BASE, "the game heap");
@@ -626,6 +656,9 @@ __attribute__((constructor)) static void Port_MapMemory(void) {
 #if defined(__APPLE__)
     map(STACK_BASE, STACK_SIZE, "the game thread's stack");
     low_region_take(); /* the region of Port_LowAlloc, now (see there) */
+#elif defined(__ANDROID__)
+    map(STACK_BASE, STACK_SIZE, "the game thread's stack");
+    low_region_take();
 #elif defined(__x86_64__) && !defined(_WIN32)
     mallopt(M_MMAP_MAX, 0);
     mallopt(M_ARENA_MAX, 1);
@@ -673,6 +706,24 @@ static void low_region_take(void) {
             exit(2);
         }
         sLowCommitted = sLowArena;
+#elif defined(__ANDROID__)
+        {
+            Bt4AddressWindow window;
+            void *region = NULL;
+            int result;
+            if (Bt4Android_WindowConfigure() != 0 ||
+                Bt4Addr_Init(&window, PORT_WINDOW) != BT4_ADDR_OK) {
+                fprintf(stderr, "bt4 android: no guest address window for low allocation\n");
+                exit(2);
+            }
+            result = Bt4Addr_MapWritable(&window, LOW_ARENA_BASE, LOW_ARENA_SIZE, &region);
+            if (result != BT4_ADDR_OK) {
+                fprintf(stderr, "bt4 android: cannot reserve guest arena at +0x%08X (error %d)\n",
+                        LOW_ARENA_BASE, result);
+                exit(2);
+            }
+            sLowArena = (uint8_t *)region;
+        }
 #elif defined(__APPLE__)
         sLowArena = map_at(LOW_ARENA_BASE, LOW_ARENA_SIZE); /* (pages are only taken as they are first used) */
         if (sLowArena == NULL) {

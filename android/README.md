@@ -10,6 +10,9 @@ standalone Android game and not a simulated launcher.
 - Integrated touchscreen input with the existing game input pipeline on
   Android, alongside SDL keyboard/gamepad handling.
 - Added host-side unit tests and a separate NDK ARM64 compilation check.
+- Added guarded 32-bit guest <-> 64-bit host address conversion with range checks.
+- Added a non-destructive mmap helper: MAP_FIXED_NOREPLACE, verifying exact placement and handling host page-size alignment.
+- Added unit tests for conversion, unmapped-range rejection, and safe collision failure.
 
 ## Not completed / not claimed
 - Android runtime and shared-library link of the game's original code.
@@ -17,6 +20,26 @@ standalone Android game and not a simulated launcher.
 - Vulkan swapchain and Android SDL3 platform integration.
 - Android Activity, touch event UI, JNI calls, ISO preparation.
 - APK packaging, gameplay validation or performance measurements.
+
+## Address-window module
+
+The new `android/include/bt4_address_window.h` + `android/src/bt4_address_window.c` implement independently verifiable conversion and memory-mapping primitives. They are wired into port-level address conversions and guest region mappings, but **not yet into all game-code pointer operations**. Cross compiling these functions does not imply the game executes on ARM64. On Android, the LLVM pass and the ASLR-safe library placement must agree on the same runtime guest base. Never fall back to `MAP_FIXED`, low-address assumptions, or disabling ASLR.
+
+## Engine memory integration (Android only)
+
+- `port/src/port_addr.h` now converts port-level addresses using the
+  dynamically configured `Port_Window` base on Android, leaving desktop
+  behavior unchanged.
+- `android/src/bt4_window_runtime.c` derives `Port_Window` from the
+  ASLR-loaded ELF image using `dladdr`, without disabling ASLR.
+- `port/src/plat_mem.c` uses non-destructive mappings for the guest stack,
+  heap, register blocks, scratchpad and allocator arena on Android.
+- The existing engine memory source is separately **compiled** for Android
+  ARM64 in CI. This proves syntax/toolchain compatibility of that source,
+  **not** correct runtime placement or execution.
+- Mappings may fail due to conflicts with the Android loader's current
+  address layout; this is a runtime constraint and must be diagnosed using
+  real device logs, not bypassed with `MAP_FIXED`.
 
 ## Architecture constraint to resolve next
 
