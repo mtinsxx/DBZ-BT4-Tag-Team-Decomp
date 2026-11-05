@@ -10,7 +10,8 @@ ROOT = Path(__file__).resolve().parents[2]
 
 def analyze(log):
     text = Path(log).read_text()
-    text = text[text.rfind('$ '):]  # Also accepts logs retained from older runs.
+    marker = text.rfind('$ ')
+    if marker >= 0: text = text[marker:]  # Also accepts logs retained from older runs.
     names = sorted(set(re.findall(r'undefined symbol: (\S+)', text)))
     references = {name: [] for name in names}
     for source in sorted((ROOT / 'port/data').glob('*.s')):
