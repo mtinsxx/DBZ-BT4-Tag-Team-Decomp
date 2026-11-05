@@ -92,7 +92,7 @@ int Bt4Android_CallKind(const void *function, uint32_t slot)
 void Bt4Android_RequireSoftFloatCallback(const void *function)
 {
     const char *k = signature(function);
-    if (k == NULL || *k == '!') {
+    if (k == NULL || *k == '!' || strchr(k, '.') != NULL) {
         fprintf(stderr, "bt4: native/unknown floating callback %p requires an ABI adapter\n", function);
         abort();
     }

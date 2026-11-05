@@ -174,6 +174,18 @@ __attribute__((constructor(101))) static void crash_init(void) {
     setvbuf(stderr, NULL, _IONBF, 0);
     AddVectoredExceptionHandler(1, on_crash);
 }
+#elif defined(__ANDROID__)
+/* debuggerd and ART own Android's signal chain. The desktop signal handler
+ * uses backtrace APIs unavailable at our minimum API and would replace ART's
+ * handlers. Keep tombstone generation intact and log explicit diagnostics. */
+#include <android/log.h>
+#include <stddef.h>
+#include "port_addr.h"
+extern const char *volatile gPortStage;
+void Port_AndroidDiagnostic(const char *message) {
+    __android_log_print(ANDROID_LOG_ERROR, "TenkaichiMobile", "%s; stage=%s; guest_window=%p",
+                        message != NULL ? message : "native diagnostic", gPortStage, Port_Window);
+}
 #else
 #include <execinfo.h>
 #include <fcntl.h>

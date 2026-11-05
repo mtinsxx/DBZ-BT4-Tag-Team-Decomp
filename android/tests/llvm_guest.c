@@ -30,8 +30,14 @@ int guest_direct(void) {
 int guest_foreign(int (*fn)(int *), int *p) { return fn(p); }
 extern float native_scale(float);
 extern double native_variadic(int, ...);
+extern int native_format(int, ...);
 float guest_fp_native(float x) { return native_scale(x); }
 int guest_fp_variadic(void) { return (int)native_variadic(0, 1.5, 2.5); }
+int guest_fp_format(void) { return native_format(0, 1.5, 2.5); }
+int guest_rejected_varcallback(void) {
+    int (* __ptr32 __uptr fn)(int, ...) = native_format;
+    return ((__typeof__(*fn) *)(fn))(0, 1.5, 2.5);
+}
 static float soft_identity(float x) { return x; }
 float guest_fp_indirect(float x) {
     float (* __ptr32 __uptr fn)(float) = soft_identity;

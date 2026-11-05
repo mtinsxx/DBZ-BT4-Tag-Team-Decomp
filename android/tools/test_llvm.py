@@ -65,6 +65,7 @@ def main():
         run([LLVM / 'llc', '-O2', '-filetype=obj', '-relocation-model=pic', native_output, '-o', native_obj])
         assert '@bt4.native.native_scale' in output.read_text()
         assert '@bt4.native.native_variadic' in output.read_text()
+        assert '@bt4.native.native_format' in output.read_text()
         run([LLVM / 'llc', '-O2', '-filetype=obj', '-relocation-model=pic', output, '-o', obj])
         if target == 'host':
             exe = build / 'guest-abi-test'

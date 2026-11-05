@@ -61,6 +61,7 @@ def main():
         log, pre, raw = (build / (stem + ext) for ext in ('.log', '.i', '.ll'))
         if (args.reuse_ir and raw.is_file() and raw.with_suffix('.defs').is_file()
                 and raw.stat().st_mtime >= source.stat().st_mtime):
+            transform(raw, raw, build, definitions=raw.with_suffix('.defs'))
             return str(raw), None
         log.write_text('')
         try:

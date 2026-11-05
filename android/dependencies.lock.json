@@ -1,0 +1,12 @@
+[
+  {
+    "filename": "openssl-3.5.7.tar.gz",
+    "url": "https://github.com/openssl/openssl/releases/download/openssl-3.5.7/openssl-3.5.7.tar.gz",
+    "sha256": "a8c0d28a529ca480f9f36cf5792e2cd21984552a3c8e4aa11a24aa31aeac98e8"
+  },
+  {
+    "filename": "curl-8.23.0.tar.xz",
+    "url": "https://curl.se/download/curl-8.23.0.tar.xz",
+    "sha256": "8dadd7d2536a314f982ad05a651b713f426bf7d02cc2c76cffb9796f2218e6c5"
+  }
+]

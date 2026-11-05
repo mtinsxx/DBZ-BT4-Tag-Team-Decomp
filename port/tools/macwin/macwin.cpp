@@ -608,7 +608,7 @@ struct Window {
             // when LLVM sees no address-taking expression in the C sources.
             if (F.isDeclaration() || (F.hasLocalLinkage() && !F.hasAddressTaken())) continue;
             IRBuilder<> B(Ctx);
-            std::string signature = (Native && floatingABI(F.getFunctionType()) ? "!" : "") + kinds(F.getFunctionType());
+            std::string signature = (Native && (floatingABI(F.getFunctionType()) || F.isVarArg()) ? "!" : "") + kinds(F.getFunctionType());
             entries.push_back(ConstantStruct::get(Entry, &F, B.CreateGlobalString(signature, "bt4.signature", 0, &M)));
         }
         if (entries.empty()) return;
@@ -632,7 +632,9 @@ struct Window {
         if (PortModule || CI->getCalledFunction() || CI->isInlineAsm()) return;
         FunctionType *FT = CI->getFunctionType();
         IRBuilder<> B(CI);
-        if (floatingABI(FT)) {
+        bool fp = floatingABI(FT);
+        for (Value *A : CI->args()) fp |= A->getType()->isFloatingPointTy();
+        if (fp) {
             // Native floating callbacks need an explicit adapter too. Until
             // generated, reject that boundary rather than use the wrong ABI.
             B.CreateCall(M.getOrInsertFunction("Bt4Android_RequireSoftFloatCallback", Type::getVoidTy(Ctx), Host), {CI->getCalledOperand()});
@@ -691,7 +693,7 @@ struct Window {
         for (Function &F : M) {
             if (!F.isDeclaration() && !F.hasLocalLinkage()) {
                 out << F.getName() << " " << kinds(F.getFunctionType());
-                if (Elf && Native && floatingABI(F.getFunctionType())) out << "|native-fp";
+                if (Elf && Native && (floatingABI(F.getFunctionType()) || F.isVarArg())) out << "|native-fp";
                 out << "\n";
             }
         }

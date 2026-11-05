@@ -22,6 +22,7 @@ extern int guest_direct(void), guest_foreign(int (*)(int *), int *);
 extern float guest_fp_native(float);
 extern float guest_fp_indirect(float), native_scale(float);
 extern int guest_fp_variadic(void);
+extern int guest_fp_format(void), guest_rejected_varcallback(void);
 static int foreign_callback(int *p) { return *p + 1; }
 extern void guest_write(int), guest_copy(void);
 typedef struct { uint32_t prev, next; } GameNode;
@@ -51,6 +52,7 @@ int main(void) {
     assert(guest_direct());
     assert(guest_foreign(foreign_callback, &outside_window) == 12);
     assert(guest_fp_native(3.5f) == 7.0f && guest_fp_variadic() == 4);
+    assert(guest_fp_format() == 4);
     assert(guest_fp_indirect(3.5f) == 3.5f);
     {
         pid_t child = fork();
@@ -59,7 +61,7 @@ int main(void) {
         if (child == 0) {
             const struct rlimit limit = {0, 0};
             setrlimit(RLIMIT_CORE, &limit);
-            Bt4Android_RequireSoftFloatCallback((const void *)native_scale);
+            guest_rejected_varcallback();
             _exit(99);
         }
         assert(waitpid(child, &status, 0) == child);
