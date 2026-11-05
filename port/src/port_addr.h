@@ -13,7 +13,25 @@
 #define PORT_ADDR_H
 #include <stdint.h>
 
-#ifdef __APPLE__
+#if defined(__ANDROID__)
+/* Android's shared libraries load with PIE/ASLR. The game address remains
+ * 32-bit, but the host address is W + offset, just like macOS's window
+ * model. W must be configured from the actual loaded library before
+ * Port_MapMemory is allowed to reserve guest memory.
+ *
+ * This only covers uses of Port_Ptr/Port_Addr in port sources. The game
+ * sources additionally require LLVM lowering of every __ptr32 dereference,
+ * conversion and boundary call. Do not treat this as complete by itself.
+ */
+extern void *Port_Window;
+#define PORT_WINDOW ((uintptr_t)Port_Window)
+static inline void *Port_Ptr(uint32_t addr) {
+    return addr != 0 ? (void *)(PORT_WINDOW + (uintptr_t)addr) : (void *)0;
+}
+static inline uint32_t Port_Addr(const volatile void *p) {
+    return p != 0 ? (uint32_t)((uintptr_t)p - PORT_WINDOW) : 0;
+}
+#elif defined(__APPLE__)
 #include <mach-o/ldsyms.h> /* _mh_execute_header: the program's first byte */
 #define PORT_WINDOW ((uintptr_t)&_mh_execute_header - 0x20000000u)
 static inline void *Port_Ptr(uint32_t addr) {
