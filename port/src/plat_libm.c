@@ -14,6 +14,13 @@ static uint32_t u(float x) { uint32_t v; __builtin_memcpy(&v, &x, 4); return v; 
 static double d(uint64_t v) { double x; __builtin_memcpy(&x, &v, 8); return x; }
 static uint64_t q(double x) { uint64_t v; __builtin_memcpy(&v, &x, 8); return v; }
 
+#if defined(__ANDROID__) || defined(BT4_ANDROID_ABI_TEST)
+/* LLVM's no-FPU AArch64 lowering calls this for the menu's uint64 timing
+   conversion. NDK compiler-rt returns float in s0; guest code needs its bits
+   in w0. Keep the usual IEEE conversion here, outside simulation arithmetic. */
+uint32_t __floatundisf(uint64_t value) { return u((float)value); }
+#endif
+
 #define F1(name) uint32_t Port_##name(uint32_t a) { return u(name(f(a))); }
 #define F2(name) uint32_t Port_##name(uint32_t a, uint32_t b) { return u(name(f(a), f(b))); }
 /* sinf, cosf, tanf, asinf, acosf, atanf, atan2f, sqrtf, powf, floorf, fabsf are the PS2's own (newlib 1.10.0,
