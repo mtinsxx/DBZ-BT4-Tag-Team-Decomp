@@ -1,5 +1,12 @@
 # Guest memory ownership and Android boot diagnostics
 
+**Superseded image-base constraint:** the architecture audit removed the residual
+constant ELF absolute-symbol translation. W can now be selected once before
+pointer constructors, instead of requiring image - 512 MiB. The historical
+0.3 findings below explain the first repair; current selection, thread and
+renderer contracts are in [ARCHITECTURE_AUDIT.md](ARCHITECTURE_AUDIT.md).
+
+
 ## Evidence and limits
 
 The Galaxy's new log proves that all three English base programs passed through

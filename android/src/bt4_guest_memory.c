@@ -40,6 +40,32 @@ int Bt4Memory_Init(Bt4GuestMemory *memory,const Bt4AddressWindow *window) {
     memory->regions[5]=(Bt4GuestRegion){.name="scratchpad",.guest=0x70000000,.bytes=0x4000};
     return 0;
 }
+int Bt4Memory_Select(Bt4GuestMemory *memory,uintptr_t image,size_t image_bytes) {
+    Bt4MemoryFailure first={0},last={0};
+    unsigned attempt=0;
+    if(!memory || memory->initialized || !image_bytes || image_bytes>UINTPTR_MAX-image) { errno=EINVAL;return -1; }
+    /* The former 512 MiB image offset is only a preference. ASLR does not
+       promise that its six unrelated preceding/following intervals are free.
+       Search before constructors encode pointers, using NOREPLACE throughout.
+       A 16 MiB step keeps page alignment and the PS2 layout unchanged. */
+    for(uintptr_t offset=0x20000000;offset<=0x60000000;offset+=0x1000000) {
+        Bt4AddressWindow window;
+        if(image<=offset || image_bytes>0x80000000-offset ||
+           Bt4Addr_Init(&window,image-offset)!=BT4_ADDR_OK)continue;
+        if(Bt4Memory_Init(memory,&window))return -1;
+        memory->image=image;memory->image_bytes=image_bytes;
+        memory->selection_attempts=++attempt;
+        if(!Bt4Memory_Reserve(memory)) {
+            memory->first_failure=first;memory->last_failure=last;
+            return 0;
+        }
+        if(!first.present)first=memory->first_failure;
+        last=memory->last_failure;memory->first_failure=first;
+        if(memory->poisoned || errno!=EEXIST)return -1; /* Do not retry permission/resource errors. */
+    }
+    if(!attempt)errno=EINVAL;
+    return -1;
+}
 int Bt4Memory_Release(Bt4GuestMemory *memory) {
     int bad=0;
     if(!memory || !memory->initialized) { errno=EINVAL;return -1; }
@@ -102,8 +128,11 @@ static void dump_failure(const Bt4MemoryFailure *f,FILE *out,const char *which) 
 }
 void Bt4Memory_Dump(const Bt4GuestMemory *memory,FILE *out,const char *phase) {
     if(!memory || !out)return;
-    fprintf(out,"guestmem phase=%s W=0x%" PRIxPTR " image-anchor=0x%" PRIxPTR " initialized=%d reserved=%d ready=%d poisoned=%d\n",
-        phase,memory->window.base,memory->window.base+UINT32_C(0x20000000),memory->initialized,memory->reserved,memory->ready,memory->poisoned);
+    fprintf(out,"guestmem phase=%s W=0x%" PRIxPTR " image=0x%" PRIxPTR " image-bytes=0x%zx image-offset=0x%" PRIxPTR
+        " selection-attempts=%u initialized=%d reserved=%d ready=%d poisoned=%d\n",
+        phase,memory->window.base,memory->image,memory->image_bytes,
+        memory->image?memory->image-memory->window.base:0,memory->selection_attempts,
+        memory->initialized,memory->reserved,memory->ready,memory->poisoned);
     for(int i=0;i<BT4_MEMORY_REGIONS;++i) {
         const Bt4GuestRegion *r=&memory->regions[i];const Bt4MapTrace *t=&r->reservation;
         fprintf(out,"guestmem region=%s guest=0x%08x requested=0x%" PRIxPTR " bytes=0x%zx page=%zu aligned=0x%" PRIxPTR

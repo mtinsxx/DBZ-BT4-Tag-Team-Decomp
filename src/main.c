@@ -4,6 +4,13 @@
 #include "sys/file.h"
 #include "sys/dma.h"
 
+#ifdef __ANDROID__
+extern void Port_AndroidBootStage(const char *stage);
+#define BOOT_STAGE(stage) Port_AndroidBootStage(stage)
+#else
+#define BOOT_STAGE(stage) ((void)0)
+#endif
+
 /* Sony kernel / libkernl */
 extern s32 GetThreadId(void);
 extern s32 ChangeThreadPriority(s32 tid, s32 prio);
@@ -129,32 +136,57 @@ void Sys_LoadIopModules(void) {
 
 /* Initialises every subsystem in order, then alternates forever between the menu overlay and a battle. */
 void Game_Main(void) {
+    BOOT_STAGE("Game_Main entered");
+    BOOT_STAGE("Game_Main: Sys_RebootIop");
     Sys_RebootIop();
+    BOOT_STAGE("Game_Main: Sys_LoadIopModules");
     Sys_LoadIopModules();
     ChangeThreadPriority(GetThreadId(), 2);
+    BOOT_STAGE("Game_Main: Heap_Init");
     Heap_Init();
+    BOOT_STAGE("Game_Main: Gfx_Init");
     Gfx_Init();
+    BOOT_STAGE("Game_Main: Snd_Init");
     Snd_Init();
+    BOOT_STAGE("Game_Main: File_Init");
     File_Init();
+    BOOT_STAGE("Game_Main: Movie_Init");
     Movie_Init();
+    BOOT_STAGE("Game_Main: Common_Init");
     Common_Init();
+    BOOT_STAGE("Game_Main: Common_LoadBoot");
     Common_LoadBoot();
+    BOOT_STAGE("Game_Main: Common_Reload");
     Common_Reload();
+    BOOT_STAGE("Game_Main: Progress_Init");
     Progress_Init();
+    BOOT_STAGE("Game_Main: Save_Init");
     Save_Init();
+    BOOT_STAGE("Game_Main: Job_Init");
     Job_Init();
+    BOOT_STAGE("Game_Main: Vu0_Init");
     Vu0_Init();
+    BOOT_STAGE("Game_Main: Dma_InitBuffers");
     Dma_InitBuffers();
+    BOOT_STAGE("Game_Main: Dbg_Init");
     Dbg_Init();
+    BOOT_STAGE("Game_Main: Pad_Init");
     Pad_Init();
+    BOOT_STAGE("Game_Main: McCard_Init");
     McCard_Init();
+    BOOT_STAGE("Game_Main: Font_Init");
     Font_Init(1);
+    BOOT_STAGE("Game_Main: FontIcon_Init");
     FontIcon_Init();
+    BOOT_STAGE("Game_Main: Fade_Init");
     Fade_Init();
+    BOOT_STAGE("Game_Main: PadWatch_Init");
     PadWatch_Init();
     for (;;) {
+        BOOT_STAGE("Game_Main: native menu overlay entry");
         Overlay_Load(0);
         Progress_Main(0);
+        BOOT_STAGE("Game_Main: Battle_Main entry");
         Battle_Main(0);
     }
 }

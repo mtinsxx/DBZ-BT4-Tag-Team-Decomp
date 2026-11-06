@@ -4,6 +4,7 @@
 #include <dlfcn.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <signal.h>
 #include <sys/resource.h>
 #include <sys/wait.h>
@@ -13,7 +14,9 @@ void *Port_Window;
 __attribute__((constructor(101))) static void configure(void) {
     Dl_info info;
     assert(dladdr(&Port_Window, &info) != 0);
-    Port_Window = (void *)((uintptr_t)info.dli_fbase - 0x20000000u);
+    const char *offset=getenv("BT4_TEST_WINDOW_OFFSET");
+    uintptr_t distance=offset?(uintptr_t)strtoull(offset,NULL,0):0x20000000u;
+    Port_Window = (void *)((uintptr_t)info.dli_fbase - distance);
 }
 extern int *guest_value(void);
 extern uint32_t guest_address(void);
@@ -53,8 +56,12 @@ extern void List_Init(GameList *), List_PushFront(GameList *, GameNode *), List_
 extern GameNode *List_GetHead(GameList *), *List_GetTail(GameList *), *List_PopFront(GameList *), *List_PopBack(GameList *);
 extern int List_GetCount(GameList *);
 extern uint32_t bt4_test_data_table[];
+extern uint32_t guest_absolute_address(void);
+extern void *guest_absolute_host(void);
 int main(void) {
     uint32_t offset = 99;
+    assert(guest_absolute_address()==0x3be71c);
+    assert(guest_absolute_host()==(char *)Port_Window+0x3be71c);
     int outside_window = 11;
     assert(Bt4Android_TryEncodePointer(NULL, &offset) == 0 && offset == 0);
     assert(Bt4Android_DecodePointer(0) == NULL);

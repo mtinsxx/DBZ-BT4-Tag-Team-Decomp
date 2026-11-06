@@ -93,8 +93,12 @@ def main():
             run([LLVM / 'clang', '-g', '-fPIE', '-pie', ROOT / 'android/tests/llvm_host.c',
                  ROOT / 'android/src/bt4_guest_abi.c', '-I' + str(ROOT / 'android/include'),
                  '-I' + str(ROOT / 'port/src'), obj, other_obj, native_obj, *sdk_objects, phi_obj, build / 'list.o', data_obj, fixup_obj, '-ldl', '-o', exe])
-            # Fresh processes exercise distinct loader-selected bases.
-            for _ in range(3): run([exe])
+            # Fresh processes vary ASLR AND the image/window offset. This must
+            # exercise absolute symbols and constructor fixups without any
+            # residual __ehdr_start - 512 MiB address formula.
+            assert "__ehdr_start" not in output.read_text()
+            for distance in ("0x20000000", "0x34000000", "0x58000000"):
+                subprocess.run([str(exe)],check=True,env={**os.environ,"BT4_TEST_WINDOW_OFFSET":distance})
     run([LLVM / 'llvm-readelf', '-h', build / 'android.o'])
     # The new ELF switch must leave the original Mach-O lowering available.
     mac = build / 'macos.ll'

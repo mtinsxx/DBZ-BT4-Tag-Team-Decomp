@@ -104,6 +104,7 @@ struct Window {
           Host(PointerType::get(Ctx, 0)), Game(PointerType::get(Ctx, GAME)) {}
 
     Constant *window() {
+        if (Elf) report_fatal_error("bt3-elf: a constant image-relative window is forbidden");
         if (!W) {
             const char *anchor = Elf ? "__ehdr_start" : "_mh_execute_header";
             GlobalVariable *mh = M.getGlobalVariable(anchor);
@@ -850,7 +851,13 @@ struct Window {
             GlobalVariable *g = M.getGlobalVariable(a.substr(0, eq), true);
             if (g && g->isDeclaration()) {
                 uint64_t addr = std::stoull(a.substr(eq + 1), nullptr, 0);
-                g->replaceAllUsesWith(ConstantExpr::getGetElementPtr(I8, window(), ConstantInt::get(I64, addr)));
+                // ELF chooses W before pointer constructors, independently of
+                // the image. Keep absolute PS2 symbols in guest space until
+                // lowerConstant materializes the runtime Port_Window load.
+                Constant *p = Elf ? ConstantExpr::getAddrSpaceCast(
+                    ConstantExpr::getIntToPtr(ConstantInt::get(I32, addr), Game), Host)
+                    : ConstantExpr::getGetElementPtr(I8, window(), ConstantInt::get(I64, addr));
+                g->replaceAllUsesWith(p);
                 g->eraseFromParent();
             }
         }

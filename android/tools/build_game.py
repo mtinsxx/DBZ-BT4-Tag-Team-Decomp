@@ -118,7 +118,7 @@ def main():
         sys.exit('Game compilation is incomplete; no final library was linked.')
     if not args.compile_only:
         support = []
-        for name in ('bt4_address_window', 'bt4_window_runtime', 'bt4_guest_abi'):
+        for name in ('bt4_address_window', 'bt4_guest_memory', 'bt4_window_runtime', 'bt4_guest_abi'):
             obj = build / (name + '.o')
             command([ndk_bin / 'aarch64-linux-android28-clang', '-fPIC', '-O2',
                      '-Iandroid/include', '-Iport/src', '-c', ROOT / f'android/src/{name}.c', '-o', obj], build / 'link.log')

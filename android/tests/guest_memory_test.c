@@ -123,9 +123,44 @@ static void test_failed_cleanup_is_not_forgotten(void) {
     int calls=mapping_calls;assert(Bt4Memory_Commit(&memory)==-1 && mapping_calls==calls);
     assert(!Bt4Memory_Release(&memory));
 }
+static void test_selection_permission_failure(void) {
+    Bt4GuestMemory memory={0};
+    deny_mapping=1;int before=mapping_calls;
+    assert(Bt4Memory_Select(&memory,UINT64_C(0x123400000000),65536)==-1);
+    assert(errno==EPERM && memory.selection_attempts==1 && mapping_calls==before+1);
+    assert(!memory.ready && !memory.reserved && memory.first_failure.error==EPERM);
+    deny_mapping=0;
+}
+static void test_window_selection(void) {
+    size_t span=UINT64_C(0xf0000000),page=(size_t)sysconf(_SC_PAGESIZE);
+    void *p=__real_mmap(NULL,span,PROT_NONE,MAP_PRIVATE|MAP_ANONYMOUS,-1,0);
+    assert(p!=MAP_FAILED);uintptr_t origin=(uintptr_t)p;
+    assert(!__real_munmap(p,span));
+    uintptr_t image=origin+0x60000000;
+    void *image_page=__real_mmap((void *)image,page,PROT_READ|PROT_WRITE,
+        MAP_PRIVATE|MAP_ANONYMOUS|MAP_FIXED_NOREPLACE,-1,0);
+    assert(image_page==(void *)image);*(unsigned char *)image_page=0xa5;
+    /* Reproduce a VMA present before dlopen in the old fixed-offset arena. */
+    uintptr_t foreign_address=image-0x20000000+BT4_GUEST_LOW_BASE;
+    void *foreign=__real_mmap((void *)foreign_address,page,PROT_READ|PROT_WRITE,
+        MAP_PRIVATE|MAP_ANONYMOUS|MAP_FIXED_NOREPLACE,-1,0);
+    assert(foreign==(void *)foreign_address);*(unsigned char *)foreign=0x73;
+    Bt4GuestMemory memory={0};
+    assert(!Bt4Memory_Select(&memory,image,page));
+    assert(memory.selection_attempts>1 && memory.window.base!=image-0x20000000);
+    assert(memory.first_failure.present && memory.first_failure.error==EEXIST);
+    assert(memory.reserved && !memory.ready && image-memory.window.base<0x80000000);
+    uintptr_t immutable=memory.window.base;
+    assert(Bt4Memory_Select(&memory,image,page)==-1 && errno==EINVAL);
+    assert(memory.window.base==immutable && memory.reserved);
+    assert(!Bt4Memory_Commit(&memory));
+    assert(*(unsigned char *)foreign==0x73 && *(unsigned char *)image_page==0xa5);
+    assert(!Bt4Memory_Release(&memory));
+    assert(!__real_munmap(foreign,page) && !__real_munmap(image_page,page));
+}
 int main(void) {
     test_page_plans();test_reserve_commit();test_collision_and_history();test_commit_rollback();
-    test_safe_old_kernel();test_failed_cleanup_is_not_forgotten();
+    test_safe_old_kernel();test_failed_cleanup_is_not_forgotten();test_window_selection();test_selection_permission_failure();
     puts("Guest memory: page plans, early ownership, RW commit, collisions, rollback, old kernels and diagnostics passed");
     return 0;
 }

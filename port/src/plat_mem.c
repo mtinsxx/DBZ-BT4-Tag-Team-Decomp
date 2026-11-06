@@ -699,12 +699,13 @@ int Port_AndroidMemoryPrepare(void) {
     gPortStage = "Android: guest memory ready; data not imported";
     return 0;
 }
+void Port_AndroidSetGameStackTop(void *top) { sGameStackTop=top; }
 int Port_AndroidRunGame(void) {
-    extern int Bt4Android_CallGame(void *);
-    if (sLowArena == NULL) return -1;
-    sGameStackTop=(uint8_t *)Port_Ptr(STACK_BASE+STACK_SIZE);
-    gPortStage="Android: entering Game_Main on guest stack";
-    return Bt4Android_CallGame(sGameStackTop);
+    extern int Bt4Android_RunGameThread(void *,size_t);
+    void *stack=Bt4Android_MemoryHost(BT4_GUEST_STACK_BASE);
+    if(sLowArena==NULL || !stack)return 2;
+    gPortStage="Android: creating registered native game thread";
+    return Bt4Android_RunGameThread(stack,BT4_GUEST_STACK_SIZE);
 }
 #endif
 

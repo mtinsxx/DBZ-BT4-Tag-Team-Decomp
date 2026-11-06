@@ -125,3 +125,9 @@ int guest_sdk_ipu_callbacks(void) {
     }
     return sdk_callback_count == 8;
 }
+
+/* Absolute PS2 symbols must use runtime W in code AND compact initializers. */
+extern unsigned char D_3BE71C[];
+static unsigned char * __ptr32 __uptr absolute_heap_end=D_3BE71C;
+u32 guest_absolute_address(void) { return (u32)D_3BE71C; }
+void *guest_absolute_host(void) { return absolute_heap_end; }

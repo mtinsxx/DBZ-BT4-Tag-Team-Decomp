@@ -1197,6 +1197,9 @@ static void hud_geometry_audit(void) {
     for(k=0;k<2;++k)if(count[k])fprintf(log,"%u,%llu,%u,%u,%u,%.5f,%.5f,%.5f,%.5f,%016llx\n",present,(unsigned long long)gDrawStartNs,gGsFrame,k,count[k],box[k][0],box[k][1],box[k][2],box[k][3],(unsigned long long)signature[k]);
 }
 
+#ifdef __ANDROID__
+static void android_frame_evidence(int target,bool acquired);
+#endif
 static void vk_frame_end(void) {
     hud_geometry_audit();
     fx_frame();
@@ -1317,8 +1320,14 @@ static void vk_frame_end(void) {
     }
     sEndT[0] = gpu_now();
     cmd = SDL_AcquireGPUCommandBuffer(sDev);
+#ifdef __ANDROID__
+    if(!cmd) { fprintf(stderr,"boot graphics fatal: acquire command: %s\n",SDL_GetError());exit(2); }
+#endif
     /* uploads: this frame's vertices and the textures decoded for it */
     copy = SDL_BeginGPUCopyPass(cmd);
+#ifdef __ANDROID__
+    if(!copy) { fprintf(stderr,"boot graphics fatal: begin copy pass: %s\n",SDL_GetError());SDL_CancelGPUCommandBuffer(cmd);exit(2); }
+#endif
     if (gsVertCount != 0) {
         SDL_GPUTransferBufferLocation src;
         SDL_GPUBufferRegion dst;
@@ -1924,6 +1933,12 @@ static void vk_frame_end(void) {
     int privatePresent = getenv("BT4_RENDER_TEST") && getenv("BT4_TAG_UI_SHOT_PREFIX");
     if (privatePresent) { acquired = false; swap = NULL; }
     else acquired = SDL_WaitAndAcquireGPUSwapchainTexture(cmd, sWindow, &swap, &sw, &sh);
+#ifdef __ANDROID__
+    if(!privatePresent && !acquired) {
+        fprintf(stderr,"boot graphics fatal: acquire swapchain: %s\n",SDL_GetError());
+        SDL_CancelGPUCommandBuffer(cmd);exit(2);
+    }
+#endif
     if(privatePresent){
         static SDL_GPUTexture *testPresent;
         int tw,th;SDL_GetWindowSizeInPixels(sWindow,&tw,&th);sw=tw;sh=th;
@@ -2054,14 +2069,23 @@ static void vk_frame_end(void) {
         }
     }
     sEndT[4] = gpu_now();
-    if (getenv("BT3_LAG_LOG") != NULL) { /* (and when the graphics chip has finished it: lag_fence) */
+    bool submitted;
+    if (getenv("BT3_LAG_LOG") != NULL) {
         SDL_GPUFence *f = SDL_SubmitGPUCommandBufferAndAcquireFence(cmd);
+        submitted=f!=NULL;
         extern void Port_LagMark(int what);
         Port_LagMark('S');
-        lag_fence(f);
+        if(f)lag_fence(f);
     } else {
-        SDL_SubmitGPUCommandBuffer(cmd); { extern void Port_LagMark(int what); Port_LagMark('S'); }
+        submitted=SDL_SubmitGPUCommandBuffer(cmd);
+        { extern void Port_LagMark(int what); Port_LagMark('S'); }
     }
+#ifdef __ANDROID__
+    if(!submitted) { fprintf(stderr,"boot graphics fatal: submit: %s\n",SDL_GetError());exit(2); }
+    android_frame_evidence(best,acquired && swap!=NULL && !privatePresent);
+#else
+    (void)submitted;
+#endif
     /* A minimized/hidden window has no swapchain acquisition to pace GPU
        submissions. Private readback targets bypass it too. Drain only those
        off-screen submissions instead of retaining an unbounded queue. The
@@ -2291,7 +2315,9 @@ static int vk_target_read(int i, uint8_t *rgba) {
         return 0;
     }
     cmd = SDL_AcquireGPUCommandBuffer(sDev);
+    if(!cmd) { SDL_ReleaseGPUTransferBuffer(sDev,tb);return 0; }
     cp = SDL_BeginGPUCopyPass(cmd);
+    if(!cp) { SDL_CancelGPUCommandBuffer(cmd);SDL_ReleaseGPUTransferBuffer(sDev,tb);return 0; }
     SDL_zero(src);
     src.texture = sTgCol[i];
     src.w = w;
@@ -2302,7 +2328,10 @@ static int vk_target_read(int i, uint8_t *rgba) {
     SDL_DownloadFromGPUTexture(cp, &src, &dst);
     SDL_EndGPUCopyPass(cp);
     fence = SDL_SubmitGPUCommandBufferAndAcquireFence(cmd); { extern void Port_LagMark(int what); Port_LagMark('S'); }
-    SDL_WaitForGPUFences(sDev, true, &fence, 1);
+    if(!fence) { SDL_ReleaseGPUTransferBuffer(sDev,tb);return 0; }
+    if(!SDL_WaitForGPUFences(sDev,true,&fence,1)) {
+        SDL_ReleaseGPUFence(sDev,fence);SDL_ReleaseGPUTransferBuffer(sDev,tb);return 0;
+    }
     SDL_ReleaseGPUFence(sDev, fence);
     px = SDL_MapGPUTransferBuffer(sDev, tb, false);
     if (px != NULL) {
@@ -2316,6 +2345,46 @@ static int vk_target_read(int i, uint8_t *rgba) {
     SDL_ReleaseGPUTransferBuffer(sDev, tb);
     return px != NULL;
 }
+
+#ifdef __ANDROID__
+/* This observes the real GS output after a successful presentation submission.
+   It generates no geometry and never substitutes an image into the game. */
+static void android_frame_evidence(int target,bool acquired) {
+    static unsigned candidates,samples;
+    static int complete;
+    unsigned real=0;int varied=0;
+    if(complete || !acquired || target<0 || target>=gsTargetCount ||
+       !gsTargets[target].cleared || !sTgCol[target])return;
+    for(uint32_t i=0;i<gsDrawCount;++i)
+        if(gsDraws[i].target==target && !gsDraws[i].native && gsDraws[i].count>=3)++real;
+    if(!real)return; /* A swapchain clear or desktop UI is not game evidence. */
+    ++candidates;
+    if(candidates>8 && candidates%30)return;
+    if(samples>=64)return; /* Bounded diagnostic readbacks, never a frame dump. */
+    ++samples;
+    uint8_t *rgba=malloc(512*448*4);
+    if(!rgba) { fprintf(stderr,"boot evidence: readback allocation failed\n");return; }
+    if(!vk_target_read(target,rgba)) {
+        fprintf(stderr,"boot evidence: target readback failed: %s\n",SDL_GetError());free(rgba);return;
+    }
+    for(size_t i=0;i<512*448;++i) {
+        if(memcmp(rgba+i*4,rgba,3))varied=1;
+        rgba[i*4+3]=255; /* Screenshot opacity only; never change the GS target. */
+    }
+    fprintf(stderr,"boot evidence: game target readback completed frame=%u GS-draws=%u GS-verts=%u VU-verts=%u target=%d varied-RGB=%d swapchain-submitted=1\n",
+        gGsFrame,real,gsVertCount,gsVuVertCount,target,varied);
+    if(varied) {
+        SDL_Surface *surface=SDL_CreateSurfaceFrom(512,448,SDL_PIXELFORMAT_RGBA32,rgba,512*4);
+        if(surface && SDL_SavePNG(surface,"tenkaichi-first-gs-frame.png.tmp") &&
+           !rename("tenkaichi-first-gs-frame.png.tmp","tenkaichi-first-gs-frame.png")) {
+            complete=1;
+            fprintf(stderr,"boot evidence: saved genuine GS target tenkaichi-first-gs-frame.png; physical display/gameplay still require owner observation\n");
+        } else fprintf(stderr,"boot evidence: capture write failed SDL=%s\n",SDL_GetError());
+        if(surface)SDL_DestroySurface(surface);
+    }
+    free(rgba);
+}
+#endif
 
 static void vk_target_copy(int src, int dst) {
     SDL_GPUCommandBuffer *cmd;

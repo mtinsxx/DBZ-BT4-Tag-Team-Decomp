@@ -663,6 +663,10 @@ static int hle_program6(void) {
 
 /* MSCAL / MSCALF (addr = instruction address) or MSCNT (addr < 0: continue where the last run stopped). */
 void GsVu1_Call(int addr) {
+#ifdef __ANDROID__
+    static int first;
+    if(!first) { first=1;fprintf(stderr,"boot execution first VU1 call entry=%d program-size=%u\n",addr,sProgSize); }
+#endif
     vu.top = vu.tops;
     vu.itop = vu.itops;
     if (vu.dbf) {

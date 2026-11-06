@@ -1,8 +1,9 @@
 # Android native port — engineering status
 
 This directory contains the **native ARM64 engine port**. The complete strict
-link now passes; the wrapper builds an experimental SDL3 Android APK. No
-on-device boot, graphics or gameplay has been established.
+link now passes; the wrapper builds an experimental SDL3 Android APK. The
+owner validated ENG/SAF and reached the memory gate. Game_Main execution,
+graphics and gameplay have not been established.
 
 ## Completed in this stage
 - Added a thread-safe, complete-snapshot touchscreen-to-libpad2 bridge.
@@ -21,7 +22,7 @@ on-device boot, graphics or gameplay has been established.
 - Compiled all 274 original game C translation units to ARM64 objects.
 - Strictly linked an explicitly labelled subset containing the original
   alignment and intrusive-list implementations (not the complete game).
-- Compiled all 135 runtime/vendor/Android translation units, including the
+- Compiled all 136 runtime/vendor/Android translation units, including the
   existing GS/VU1, SDL GPU/Vulkan, audio, menu and network sources.
 - Removed assembly-table ABS32 relocations with checked startup fixups;
   direct native/software-float boundaries have integer-bit adapters.
@@ -36,16 +37,18 @@ on-device boot, graphics or gameplay has been established.
 - Experimental APK assembled, signed and verified by pinned SDK tools.
 - Profile selection uses verified main-program size/CRC rather than desktop markers.
 - Persistent SAF descriptor feeds bounded ISO/AFS file streams without private copies.
-- No phone execution: boot, presentation, movies, controls and performance need
-  owner testing. Touch UI, state-list integration and hardware validation are
+- The supplied phone run stopped before guest memory was ready; game entry,
+  presentation, movies, controls and performance need owner testing. Touch UI, state-list integration and hardware validation are
   not complete. The six IPU parsers are not a complete new MPEG-2 video decoder.
 
 See [SDK_RECONSTRUCTION.md](SDK_RECONSTRUCTION.md) and [ANDROID_BOOT.md](ANDROID_BOOT.md).
 
-The Galaxy's next test passed ENG/SAF but failed the late guest mmap stage.
-Sparse guest ranges are now reserved PROT_NONE during window setup and committed
-RW only at explicit boot, with detailed failure/overlap diagnostics. The fixed
-compiler anchor and importer are unchanged. See [GUEST_MEMORY.md](GUEST_MEMORY.md).
+The Galaxy validated ENG/SAF and stopped at guest memory. The architecture audit
+replaces the fixed image/window relationship with checked constructor-time
+selection, replaces manual SP switching with a registered pthread/JNI stack,
+and explicitly activates GS=gpu/Vulkan. Read the full
+[architecture audit](ARCHITECTURE_AUDIT.md), including the unchanged importer,
+actual execution checkpoints and the limits of host/CI verification.
 
 ## Address-window module
 

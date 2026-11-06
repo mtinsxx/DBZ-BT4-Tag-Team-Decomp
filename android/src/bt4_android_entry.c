@@ -2,6 +2,11 @@
 #include "bt4_android_boot.h"
 #include "bt4_iso9660.h"
 #include "bt4_iso_source.h"
+#include "bt4_guest_thread.h"
+#include "bt4_guest_memory.h"
+#include "bt4_guest_abi.h"
+#include <inttypes.h>
+#include <pthread.h>
 #include "bt4_base_profile.h"
 #include "bt4_online_compat.h"
 #include <jni.h>
@@ -20,6 +25,11 @@ extern int Port_BuildIdentity(unsigned long long *);
 extern void Port_BuildIdentityResetForSetup(void);
 extern const char *Port_BuildIdentitySummary(void);
 PORT_HOST static int started;
+extern const char *volatile gPortStage;
+void Port_AndroidBootStage(const char *stage) {
+    gPortStage=stage;
+    SDL_Log("boot execution stage=%s",stage);
+}
 
 static void log_output(void *unused,int category,SDL_LogPriority priority,const char *message) {
     (void)unused;(void)category;(void)priority;
@@ -27,16 +37,45 @@ static void log_output(void *unused,int category,SDL_LogPriority priority,const 
     __android_log_write(ANDROID_LOG_INFO,"Tenkaichi",message);
 }
 
-/* AAPCS64 callee-saved x19 retains the original SDL thread stack. x18 is
-   Android's reserved platform register and is deliberately untouched. */
-__attribute__((naked)) static int call_on_stack(void (*entry)(void),void *top) {
-    __asm__ volatile("stp x29, x30, [sp, #-32]!\n"
-                     "stp x19, x20, [sp, #16]\n"
-                     "mov x29, sp\nmov x19, sp\nmov sp, x1\nblr x0\n"
-                     "mov sp, x19\nldp x19, x20, [sp, #16]\n"
-                     "ldp x29, x30, [sp], #32\nmov w0, wzr\nret\n");
+extern void Port_AndroidSetGameStackTop(void *top);
+static int game_thread(void *unused) {
+    pthread_attr_t actual;void *stack=NULL;size_t bytes=0;int error;
+    void *frame=__builtin_frame_address(0);uint32_t address=0;(void)unused;
+    error=pthread_getattr_np(pthread_self(),&actual);
+    if(!error) {
+        error=pthread_attr_getstack(&actual,&stack,&bytes);
+        pthread_attr_destroy(&actual);
+    }
+    if(error || !Bt4Thread_StackValid(Bt4Android_MemoryHost(BT4_GUEST_STACK_BASE),
+        BT4_GUEST_STACK_SIZE,stack,bytes,frame) ||
+       Bt4Android_TryEncodePointer(frame,&address) || address<BT4_GUEST_STACK_BASE ||
+       address>=BT4_GUEST_STACK_BASE+BT4_GUEST_STACK_SIZE || ((uintptr_t)frame&15)) {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,"boot thread invalid registered stack base=%p bytes=%zu frame=%p guest=0x%08x pthread-error=%d",stack,bytes,frame,address,error);
+        return 2;
+    }
+    Port_AndroidSetGameStackTop(frame); /* Exclude Bionic/ART thread metadata from future snapshots. */
+    SDL_Log("boot thread registered stack base=%p bytes=%zu frame=%p guest=0x%08x",stack,bytes,frame,address);
+    if(!SDL_GetAndroidJNIEnv()) {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,"boot thread JNI attach failed: %s",SDL_GetError());return 2;
+    }
+    /* SDL defines its Android video thread at VIDEO initialization. Do this on
+       the correctly registered and attached game thread before any GS window. */
+    if(!SDL_Init(SDL_INIT_VIDEO) || !SDL_IsMainThread()) {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,"boot thread SDL video ownership failed: %s",SDL_GetError());return 2;
+    }
+    SDL_Log("boot thread JNI attached; SDL video thread=%" PRIu64,(uint64_t)SDL_GetCurrentThreadID());
+    Game_Main();
+    SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,"boot: Game_Main returned unexpectedly");
+    return 2;
 }
-int Bt4Android_CallGame(void *top) { return call_on_stack(Game_Main,top); }
+int Bt4Android_RunGameThread(void *stack,size_t bytes) {
+    int result=2;Bt4ThreadTrace trace;
+    if(Bt4Thread_Run(stack,bytes,game_thread,NULL,&result,&trace)) {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,"boot thread operation=%s errno=%d (%s) stack=%p bytes=%zu",
+            trace.operation,trace.error,strerror(trace.error),stack,bytes);return 2;
+    }
+    return result;
+}
 
 static void *read_program(const char *root,const char *name,size_t *size) {
     char path[2048];FILE *file;long length;void *bytes;
@@ -95,10 +134,15 @@ __attribute__((visibility("default"))) int SDL_main(int argc,char **argv) {
     }
     SDL_SetLogOutputFunction(log_output,NULL);
     if (setenv("BT3_DATA","gamedata",1) ||
-        setenv("BT4_CONTENT_ROOT",argv[1],1) || setenv("BT3_GPU_API","vulkan",1)) {
+        setenv("BT4_CONTENT_ROOT",argv[1],1) || setenv("BT3_GPU_API","vulkan",1) ||
+        setenv("BT3_GS","gpu",1) || setenv("BT3_GS_THREAD","0",1)) {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,"Cannot configure private storage: %s",strerror(errno));
         return 2;
     }
+    /* Evidence belongs to this boot, never a screenshot from a previous run. */
+    (void)unlink("tenkaichi-first-gs-frame.png");
+    (void)unlink("tenkaichi-first-gs-frame.png.tmp");
+    SDL_Log("boot configuration GS=gpu backend=vulkan render-thread=registered-game-thread");
     unsetenv("BT4_ISO"); /* Legacy private copies must never shadow the selected URI. */
     SDL_Log("boot stage=ISO fingerprint; source=SAF fd; persistent extraction cache=0");
     FILE *main_program=Bt4Iso_OpenFile("disc/SLUS_219.78");

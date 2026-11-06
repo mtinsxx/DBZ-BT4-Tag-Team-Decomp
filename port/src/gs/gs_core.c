@@ -1539,6 +1539,12 @@ static int gs_on(void) {
             }
         }
     }
+#ifdef __ANDROID__
+    if(on && !sGpu) {
+        fprintf(stderr,"boot graphics fatal: requested GPU renderer failed; refusing silent software/headless continuation\n");
+        exit(2);
+    }
+#endif
     return on;
 }
 
@@ -1575,6 +1581,10 @@ void Port_GsGifChannel(uint32_t addr, uint32_t qwc, int chain) {
 
 /* Carries out a source-chain transfer on VIF1 that starts at `tadr` (PS2 address = host address). */
 void Port_GsVif1Chain(uint32_t tadr, int tte) {
+#ifdef __ANDROID__
+    static int first;
+    if(!first) { first=1;fprintf(stderr,"boot execution first VIF1 chain guest=0x%08x tte=%d\n",tadr,tte); }
+#endif
     static uint64_t next, start, sum, worst, sumGame, sumList, sumTex, sumPipe, sumEnd, perMin = ~0ull, perMax;
     static unsigned n, over;
     uint64_t t, tChain;

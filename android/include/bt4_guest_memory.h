@@ -24,11 +24,19 @@ typedef struct Bt4MemoryFailure {
 } Bt4MemoryFailure;
 typedef struct Bt4GuestMemory {
     Bt4AddressWindow window;
+    uintptr_t image;
+    size_t image_bytes;
+    unsigned selection_attempts;
     Bt4GuestRegion regions[BT4_MEMORY_REGIONS];
     int initialized,reserved,ready,poisoned;
     Bt4MemoryFailure first_failure,last_failure;
 } Bt4GuestMemory;
 int Bt4Memory_Init(Bt4GuestMemory *memory,const Bt4AddressWindow *window);
+/* Constructor-only selection on a zero-initialized object: no compact pointers
+   may have been published.
+   Every candidate preserves positive 31-bit image offsets, checked ownership
+   and the original guest layout. Never change W after this call. */
+int Bt4Memory_Select(Bt4GuestMemory *memory,uintptr_t image,size_t image_bytes);
 int Bt4Memory_Reserve(Bt4GuestMemory *memory);
 int Bt4Memory_Commit(Bt4GuestMemory *memory);
 /* Only while no game/allocator user can access the regions. Failed munmap
@@ -36,7 +44,7 @@ int Bt4Memory_Commit(Bt4GuestMemory *memory);
 int Bt4Memory_Release(Bt4GuestMemory *memory);
 void *Bt4Memory_Host(const Bt4GuestMemory *memory,uint32_t guest);
 void Bt4Memory_Dump(const Bt4GuestMemory *memory,FILE *output,const char *phase);
-#ifdef __ANDROID__
+#if defined(__ANDROID__) || defined(BT4_WINDOW_RUNTIME_HOST_TEST)
 int Bt4Android_MemoryCommit(void);
 void *Bt4Android_MemoryHost(uint32_t guest);
 #endif
