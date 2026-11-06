@@ -20,7 +20,7 @@ standalone Android game and not a simulated launcher.
 - Compiled all 274 original game C translation units to ARM64 objects.
 - Strictly linked an explicitly labelled subset containing the original
   alignment and intrusive-list implementations (not the complete game).
-- Compiled all 124 runtime/vendor/Android translation units, including the
+- Compiled all 126 runtime/vendor/Android translation units, including the
   existing GS/VU1, SDL GPU/Vulkan, audio, menu and network sources.
 - Removed assembly-table ABS32 relocations with checked startup fixups;
   direct native/software-float boundaries have integer-bit adapters.
@@ -101,7 +101,7 @@ checks and successful builds must never be presented as proof of gameplay.
 
 ## SDK investigation
 
-The full ARM64 link has advanced from 102 to **34** SDK/CRI targets. See
+The full ARM64 link has advanced from 102 to **22** SDK/CRI targets. See
 [SDK_RECONSTRUCTION.md](SDK_RECONSTRUCTION.md) for the verified native methods,
 compact stream layouts, tests and scalar correction. See
 [SDK_INVESTIGATION.md](SDK_INVESTIGATION.md) for the 15-table audit, strict-link

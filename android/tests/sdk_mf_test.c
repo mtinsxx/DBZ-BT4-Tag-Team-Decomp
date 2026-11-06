@@ -32,6 +32,7 @@ static void ipp(uint32_t c, const char *m, void *h) { assert(c == 0xF1234567u); 
 static void ipi(uint32_t c, const char *m, uint32_t h) { assert(c == 0xF1234567u); capture(m,Bt4Cri_Pointer(h)); }
 static void iip(uint32_t c, uint32_t m, void *h) { assert(c == 0xF1234567u); capture(Bt4Cri_Pointer(m),h); }
 static void iii(uint32_t c, uint32_t m, uint32_t h) { assert(c == 0xF1234567u); capture(Bt4Cri_Pointer(m),Bt4Cri_Pointer(h)); }
+extern void test_file_fields(void);
 
 int main(void) {
     char name[20];
@@ -102,5 +103,6 @@ int main(void) {
     for (i = 0; i < 40; ++i) func_0027F9B8(D_002D9868+i);
     assert(func_0027FCD0(NULL) == 0 && func_0027FD08(NULL) == 0 && func_0027FDC0(NULL) == 0);
     func_0027F9B8(NULL);
+    test_file_fields();
     return 0;
 }

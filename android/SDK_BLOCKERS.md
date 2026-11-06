@@ -1,15 +1,15 @@
 # Original 102 SDK link contracts (comparison baseline)
 
 Current result after private analysis of the owner's verified main executable:
-**63 undefined symbols remain**. See [SDK_RECONSTRUCTION.md](SDK_RECONSTRUCTION.md)
-for the 38 actual function implementations, TLB scalar correction, contracts,
+**22 undefined symbols remain**. See [SDK_RECONSTRUCTION.md](SDK_RECONSTRUCTION.md)
+for the 79 actual function implementations, TLB scalar correction, contracts,
 tests and intermediate strict-link results. The original inventory below stays
 unchanged for name-by-name comparisons; it is not the current unresolved count.
 
 Follow-up: [SDK investigation and private evidence generation](SDK_INVESTIGATION.md)
 records the 2026-11-06 audit, all 15 table classifications, 103 pointer slots,
 source-selection findings and the Android-only extraction workflow. The
-baseline below remains unresolved; no SDK implementation was guessed.
+baseline below is immutable; current dispositions are recorded separately.
 
 Observed on 2026-11-05 with the Android LLVM bring-up pipeline.
 

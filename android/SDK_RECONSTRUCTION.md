@@ -15,8 +15,8 @@ methods reference the original skeleton resource symbols; tests supply their
 own synthetic resources.
 
 The original **102-symbol baseline is immutable**. The first reconstructed
-sets resolve **68 baseline entries: 67 actual functions and one wrongly
-classified scalar**, leaving **34 undefined symbols**. No table was removed,
+sets resolve **80 baseline entries: 79 actual functions and one wrongly
+classified scalar**, leaving **22 undefined symbols**. No table was removed,
 no weak/stub symbol was introduced and no callback reference was nulled to
 make the linker pass. The complete library still fails `--no-undefined`.
 
@@ -198,6 +198,45 @@ This proves the documented scalar contracts against the test oracle, not
 execution equivalence measured on a console or a gameplay result. SIMD/NEON
 optimization remains future work after the scalar baseline.
 
+## Eight DVD/host field methods
+
+`bt4_sdk_file_fields.c` recovers seek, tell, signed-byte status and completed-byte
+count for the DVD and host work records (0x48 and 0x30 bytes). DVD positions,
+sector count and completion count are at +0x0c/+0x08/+0x14; host equivalents
+are +0x1c/+0x10/+0x28. Both status bytes are at +2. Seek clears completed
+sectors, clamps the updated position and preserves the 32-bit wrap of ADDU.
+The read-byte method returns `completed_sectors << 11` only at status one.
+Unknown fields stay opaque. These methods do not synthesize provider progress.
+
+Tests cover all 256 status-byte values, overflow/clamping, all seek origins,
+unknown origins, error callbacks and neighboring-byte preservation. They run
+with the memory-file contract fixture under ASan/UBSan.
+
+## Four IPU-table entries are diagnostics, not decoder operations
+
+`0x2A0C00`, `0x2A0C10`, `0x2A0E08`, `0x2A0E18` tail-call `0x29C5A0` with
+four distinct imported messages. Its helper `0x297E50` dispatches event type
+zero: decoder+0x868 is a compact outer handle, decoder+0x0c enables dispatch,
+outer+0x40 points to callback records, with callback/context/EE-gp at
+record+0x0c/+0x10/+0x14. The event descriptor is two 32-bit words `{0, message}`.
+Absent table/handler returns zero; otherwise the handler's return word is
+propagated. With no outer handle or dispatch disabled, `0x29C428` prints through
+the imported one-string format. The format's content is not embedded here.
+
+The native implementation uses real `Port_LowAlloc`/`Port_LowFree` for the
+transient descriptor. An Android stack pointer may be outside the compact
+window; truncating a local C array address would break a guest callback.
+Pointer/integer callback parameters use matching C call types and metadata;
+integer returns retain their bits and pointer returns are encoded back into
+a compact word. Unsupported return/argument ABIs abort explicitly. The saved
+EE gp has no native PIC register effect. No IPU register is touched by these
+four genuine diagnostic implementations.
+
+The separate host contract uses its own strings and isolated guest-heap fixture
+and checks all eight pointer/integer argument combinations, high-bit contexts
+and returns, pointer returns, nested callback re-entry and cleanup, missing
+handlers and the actual stdout route. This does not validate video decoding.
+
 ## Actual intermediate strict-link results
 
 | Set | Runtime units compiled | Remaining | Resolved from original 102 | New undefined |
@@ -210,6 +249,8 @@ optimization remains future work after the scalar baseline.
 | SJUNI | 122/122 | 63 | 39 | 0 |
 | Memory-file driver | 123/123 | 50 | 52 | 0 |
 | MMI pixel kernels | 124/124 | 34 | 68 | 0 |
+| DVD/host field methods | 125/125 | 26 | 76 | 0 |
+| IPU diagnostic leaves | 126/126 | 22 | 80 | 0 |
 
 Each attempt uses the whole 274-unit game archive and `--no-undefined`.
 Logs/reports stay in local build output and are reproduced by the full Actions
@@ -225,16 +266,32 @@ LLVM's optional sanitizer runtime is absent in this workspace. Leak scanning
 is disabled because the managed executor cannot run its ptrace scan; these
 tests do not establish leak freedom or device gameplay.
 
-## Remaining 34 symbols and next work
+## Remaining 22 symbols and next work
 
-- **24 file-driver entries**: 12 DVD (`dvCi`) and 12 host-file (`htCi`).
-  Open/read, seek/status, completion and directory/provider dependencies still
-  need reconstruction and a verified native I/O boundary. They are not blindly
-  aliased to ADXF methods or headless sce* test implementations.
-- **10 IPU/MPEG dispatch targets** in `D_002FAA08`: original methods access
-  IPU control/command registers (`0x10002010` / `0x10002000`) and bitstream
-  helpers. They need a verified native decoder boundary, not mapped PS2
-  hardware registers, invented callbacks or empty methods.
+- **16 I/O methods**: eight DVD (`dvCi`) and eight host-file (`htCi`). Each
+  group still needs server/update, existence/size, open/read, close/stop and
+  extended-command behavior. DVD calls the original request allocator,
+  read/abort/completion helpers at `0x279D98`, `0x279EC0`, `0x27A368`,
+  `0x27A238`, `0x279E20`; its directory overrides use `0x27D010` and
+  `0x27C7A0`. Host uses the filename/override helpers at `0x27DEB0` and
+  `0x27D5B8`, plus open/seek/read/close RPC wrappers around `0x27AF78`,
+  `0x27B0A8`, `0x27B110`. Native I/O must integrate these contracts with
+  actual ISO/host reads, completion/cancellation, directory overrides and
+  error paths. Returning a plausible descriptor or aliasing ADXF is not valid.
+- **Six IPU/MPEG parser/decoder entries**: `0x2A09D8`, `0x2A0B18`,
+  `0x2A0C20`, `0x2A11E8`, `0x2A1278`, `0x2A1310`. They transitively
+  consume bits through `0x29ECB8`/`0x29EEC8`, including IPU command/control
+  (`0x10002000`/`0x10002010`), DMA/refill and decoder fields. For example,
+  `0x2A09D8` reads 28/16-bit extension fields and updates +0x134/+0x138,
+  +0x144/+0x148/+0x14c/+0x150; `0x2A1278` consumes a fixed sequence of
+  bit widths; `0x2A1310` fills 16-bit fields at +0x19c/+0x1a8. Their native
+  bitstream/refill contract is not implemented. Do not simply add these
+  bodies with an undefined `0x29ECB8` and claim the old blockers resolved.
+
+The existing `plat_movie.c`/`plat_mpeg2.c` boundary decodes from a host movie
+path through sceMpeg* entry points. Its handle/layout and picture pipeline are
+not the original CRI object/bit reader; blindly redirecting the six callbacks
+there would lose their state semantics. A verified integration is still needed.
 
 All remaining signatures/transitive dependencies must be inspected before
 implementation. The main ELF now supplies the evidence; no additional file is
@@ -247,5 +304,11 @@ from a clean Debian 13 environment by Actions run
 [42158816651](https://github.com/mtinsxx/BT4-Native-Android/actions/runs/42158816651):
 9/9 host tests, 3/3 sanitizer contract groups and desktop regressions passed;
 122/122 runtime units compiled and the strict link failed with exactly the
-expected 63 symbols, zero ABS32 and no other linker errors. The newer 68-entry
+expected 63 symbols, zero ABS32 and no other linker errors. The newer 80-entry
 checkpoint has separate local logs and must be checked in its own fresh CI run.
+
+Local final host checks: 12/12 CTest with LLVM enabled; 10/10 SDK Python tool
+tests; 6/6 SDK contract groups under ASan/UBSan; 81/81 desktop regressions.
+The original Mach-O lowering test still emits its ARM64 object. The pixel
+oracle and synthetic callbacks are unit evidence, not commercial-data execution
+or an on-device test. The native Android runtime has 126 source units now.
