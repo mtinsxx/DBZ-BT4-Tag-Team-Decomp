@@ -58,3 +58,33 @@ int guest_indirect(void) {
     d = ((__typeof__(*result_integer) *)(result_integer))() == (u32)&value;
     return a == 73 && b == value && c == value && d;
 }
+
+/* Exercise the actual reconstructed SDK sources across the guest/native ABI,
+   including native integer words that game declarations treat as pointers. */
+static u32 sdk_source[4] = {0x80000000u, 0x12345678u, 0xFFFFFFFFu, 17};
+static u32 sdk_destination[4], sdk_record[16];
+extern u32 D_002D3FE4, D_002D3FE8;
+extern int func_002BA2D0(void *, const void *, u32);
+extern int func_002BA688(void *, const void *, u32);
+extern void *func_002BA308(const void *, const void *, u32);
+extern void func_0027BD48(void *, void *);
+extern void func_00283338(void *, void *, void *);
+extern void *func_00283330(const void *);
+extern int func_0028C158(void);
+int guest_sdk_contracts(void) {
+    int (* __ptr32 __uptr size_query)(void *) = (int (*)(void *))func_0028C158;
+    void *(* __ptr32 __uptr uuid_query)(const void *) = func_00283330;
+    if (func_002BA2D0(sdk_destination, sdk_source, 15) != 0 ||
+        sdk_destination[0] != sdk_source[0] || sdk_destination[2] != sdk_source[2] || sdk_destination[3] != 0) return 0;
+    if (func_002BA688(sdk_destination, sdk_source, 16) != 0 || sdk_destination[3] != 17) return 0;
+    if (func_002BA308(sdk_source, sdk_source + 3, 0xFFFFFFFFu) != sdk_source + 2) return 0;
+    if (func_002BA308(sdk_source, sdk_source + 3, 17) != 0) return 0;
+    func_00283338(sdk_record, (void *)accept_pointer, &value);
+    if (sdk_record[14] != (u32)accept_pointer || sdk_record[15] != (u32)&value) return 0;
+    sdk_record[2] = (u32)&value;
+    if (func_00283330(sdk_record) != &value ||
+        ((__typeof__(*uuid_query) *)(uuid_query))(sdk_record) != &value) return 0;
+    func_0027BD48((void *)accept_pointer, &value);
+    return D_002D3FE4 == (u32)accept_pointer && D_002D3FE8 == (u32)&value &&
+        ((__typeof__(*size_query) *)(size_query))(sdk_record) == 2048;
+}

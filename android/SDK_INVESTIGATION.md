@@ -1,5 +1,13 @@
 # SDK investigation — 2026-11-06
 
+**Current follow-up:** the owner has now supplied the main executable. Its
+English B14 Rev2 main-program identity and all 103 table words were verified.
+[SDK_RECONSTRUCTION.md](SDK_RECONSTRUCTION.md) records 38 implemented functions
+and one scalar correction: **39 baseline entries resolved, 63 still undefined**.
+The sections below preserve the original pre-input investigation/baseline;
+their unknown classifications and missing-input statements describe that earlier
+state. No original ELF/assembly is committed or published.
+
 ## Result and evidence limits
 
 The strict ARM64 link still has **102 distinct undefined symbols**. There are

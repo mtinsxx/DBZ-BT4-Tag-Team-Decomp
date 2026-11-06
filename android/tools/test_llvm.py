@@ -53,8 +53,17 @@ def main():
         run([LLVM / 'clang', *flags, '-O2', '-fPIC', '-Xclang', '-disable-llvm-passes',
              '-S', '-emit-llvm', ROOT / 'android/tests/llvm_native.c', '-o', native])
         transform(native, native, build, native=True, definitions=native.with_suffix('.defs'))
+        sdk_modules = []
+        for name in ('bt4_sdk_memory', 'bt4_sdk_fields'):
+            raw_sdk = build / f'{target}.{name}.ll'
+            run([LLVM / 'clang', *flags, '-O2', '-fPIC', '-fno-strict-aliasing',
+                 '-I' + str(ROOT / 'android/include'), '-Xclang', '-disable-llvm-passes',
+                 '-S', '-emit-llvm', ROOT / f'android/src/{name}.c', '-o', raw_sdk])
+            transform(raw_sdk, raw_sdk, build, native=True, definitions=raw_sdk.with_suffix('.defs'))
+            sdk_modules.append(raw_sdk)
         sigs = build / f'{target}.signatures'
-        sigs.write_text(source.with_suffix('.defs').read_text() + other.with_suffix('.defs').read_text() + native.with_suffix('.defs').read_text())
+        sigs.write_text(source.with_suffix('.defs').read_text() + other.with_suffix('.defs').read_text() + native.with_suffix('.defs').read_text() +
+            ''.join(raw.with_suffix('.defs').read_text() for raw in sdk_modules))
         transform(source, output, build, signatures=sigs)
         other_output = build / f'{target}.other.window.ll'
         transform(other, other_output, build, signatures=sigs)
@@ -63,6 +72,12 @@ def main():
         native_output, native_obj = build / f'{target}.native.window.ll', build / f'{target}.native.o'
         transform(native, native_output, build, port=True, native=True, signatures=sigs)
         run([LLVM / 'llc', '-O2', '-filetype=obj', '-relocation-model=pic', native_output, '-o', native_obj])
+        sdk_objects = []
+        for raw_sdk in sdk_modules:
+            sdk_output, sdk_obj = raw_sdk.with_suffix('.window.ll'), raw_sdk.with_suffix('.o')
+            transform(raw_sdk, sdk_output, build, port=True, native=True, signatures=sigs)
+            run([LLVM / 'llc', '-O2', '-filetype=obj', '-relocation-model=pic', sdk_output, '-o', sdk_obj])
+            sdk_objects.append(sdk_obj)
         assert '@bt4.native.native_scale' in output.read_text()
         assert '@bt4.native.native_variadic' in output.read_text()
         assert '@bt4.native.native_format' in output.read_text()
@@ -71,7 +86,7 @@ def main():
             exe = build / 'guest-abi-test'
             run([LLVM / 'clang', '-g', '-fPIE', '-pie', ROOT / 'android/tests/llvm_host.c',
                  ROOT / 'android/src/bt4_guest_abi.c', '-I' + str(ROOT / 'android/include'),
-                 '-I' + str(ROOT / 'port/src'), obj, other_obj, native_obj, build / 'list.o', data_obj, fixup_obj, '-ldl', '-o', exe])
+                 '-I' + str(ROOT / 'port/src'), obj, other_obj, native_obj, *sdk_objects, build / 'list.o', data_obj, fixup_obj, '-ldl', '-o', exe])
             # Fresh processes exercise distinct loader-selected bases.
             for _ in range(3): run([exe])
     run([LLVM / 'llvm-readelf', '-h', build / 'android.o'])

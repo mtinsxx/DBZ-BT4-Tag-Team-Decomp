@@ -37,7 +37,7 @@ def tables(data):
                 table, offset = label[1], 0
                 if table in result:
                     raise ValueError(f'Duplicate table {table}')
-                result[table] = dict(source=source.name, line=line_number, slots=[], size=0)
+                result[table] = dict(source=source.name, line=line_number, slots=[], words=[], size=0)
                 continue
             if table is None or not line.strip() or line.startswith('#'):
                 continue
@@ -49,6 +49,8 @@ def tables(data):
                     if pointer and not pointer[1][0].isdigit():
                         delta = int(pointer[3], 0) * (-1 if pointer[2] == '-' else 1) if pointer[3] else 0
                         result[table]['slots'].append(dict(offset=offset, symbol=pointer[1], addend=delta, line=line_number))
+                    else:
+                        result[table]['words'].append(dict(offset=offset, value=int(value, 0), line=line_number))
                     offset += 4
                 else:
                     offset += int(value, 0)
@@ -80,6 +82,11 @@ def object_references(builds, symbols, nm):
 
 def inventory(root=ROOT, builds=(), nm='llvm-nm'):
     rows = baseline()
+    recovery_file = root / 'android/sdk-reconstruction.json'
+    recovery = json.loads(recovery_file.read_text()) if recovery_file.exists() else dict(functions=[], data=[])
+    recovered = {r['symbol']: r for r in recovery['functions']}
+    if len(recovered) != len(recovery['functions']) or set(recovered) - {r['symbol'] for r in rows}:
+        raise ValueError('Invalid reconstructed-function inventory')
     shape = tables(root / 'port/data')
     targets = {table for row in rows for table in row['tables']}
     count, refs = object_references(builds, targets | {r['symbol'] for r in rows}, nm) if builds else (0, {})
@@ -93,13 +100,14 @@ def inventory(root=ROOT, builds=(), nm='llvm-nm'):
     import portsrc
     included = {str(p.relative_to(root)) for p in portsrc.sources()}
     candidates = collections.defaultdict(list)
-    for path in sorted((root / 'src').rglob('*.c')):
+    for path in sorted([*(root / 'src').rglob('*.c'), *(root / 'android/src').glob('*.c')]):
         text = path.read_text()
         for row in rows:
             name = row['symbol']
             for match in re.finditer(r'\b' + re.escape(name) + r'\s*\([^;{}]*\)\s*\{', text):
                 candidates[name].append(dict(source=path.relative_to(root).as_posix(),
-                    line=text.count('\n', 0, match.start()) + 1, included_in_game_build=str(path.relative_to(root)) in included))
+                    line=text.count('\n', 0, match.start()) + 1, included_in_game_build=str(path.relative_to(root)) in included,
+                    included_in_runtime_build=path.parent == root / 'android/src'))
     contracts = []
     for row in rows:
         slots = []
@@ -109,10 +117,25 @@ def inventory(root=ROOT, builds=(), nm='llvm-nm'):
                 if slot['symbol'] == row['symbol']:
                     slots.append(dict(table=table, source='port/data/' + entry['source'], **slot))
         if not slots:
-            raise ValueError(f'Baseline symbol disappeared from tables: {row["symbol"]}')
+            # Verified TLB EntryHi scalar, not a native function relocation.
+            if row['symbol'] == 'func_00100000':
+                entry = shape['D_002EB190']
+                word = next((w for w in entry['words'] if w['offset'] == 20 and w['value'] == 0x100000), None)
+                if word:
+                    slots.append(dict(table='D_002EB190', source='port/data/' + entry['source'],
+                        symbol=row['symbol'], offset=20, addend=0, line=word['line'], classification='tlb_entry_hi_literal'))
+            if not slots:
+                raise ValueError(f'Baseline symbol disappeared without an audited disposition: {row["symbol"]}')
+        reconstruction = recovered.get(row['symbol'])
+        if reconstruction and not any(c['source'] == reconstruction['source'] for c in candidates[row['symbol']]):
+            raise ValueError(f'Reconstructed function has no source definition: {row["symbol"]}')
         contracts.append(dict(**row, slots=slots, c_candidates=candidates[row['symbol']],
-            native_consumers=refs.get(row['symbol'], []), signature=None, implementation_verified=False))
+            native_consumers=refs.get(row['symbol'], []),
+            signature=reconstruction['native_signature'] if reconstruction else None,
+            signature_kind='native_adapter' if reconstruction else None,
+            reconstruction=reconstruction, implementation_verified=bool(reconstruction)))
     return dict(schema=1, baseline_count=len(rows), slot_count=sum(len(c['slots']) for c in contracts),
+        pointer_slot_count=sum(1 for c in contracts for s in c['slots'] if not s.get('classification')),
         native_objects_examined=count, asm_cod_present=(root / 'asm/cod').is_dir(),
         table_count=len(targets), contracts=contracts,
         tables={t: dict(**shape[t], native_consumers=refs.get(t, []), incoming=incoming[t]) for t in sorted(targets)},

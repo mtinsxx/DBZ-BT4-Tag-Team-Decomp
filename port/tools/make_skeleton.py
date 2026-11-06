@@ -20,6 +20,7 @@ the list the program reads at start. Run this again after a change to gen_data.p
 data split:      python3 port/tools/gen_data.py && BT3_CC=clang64 python3 port/tools/undefined.py
                  python3 port/tools/make_skeleton.py"""
 import pathlib, re, struct, subprocess
+from data_literals import literal_for, literal_at
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 OBJ = ROOT / "port/build/obj_data64"
@@ -120,13 +121,25 @@ def main():
                 raise SystemExit(f"{path.name}: not found in the game's programs")
             _, which, so = best
         i = 0
+        table = None
+        table_offset = 0
         while i < size or i in at:
             for label, is_global in at.get(i, []):
+                table = label
+                table_offset = i
                 out += ([f".globl {label}"] if is_global else []) + [f"{label}:"]
             if i >= size:
                 break
+            scalar = literal_at(table, i - table_offset)
+            if scalar is not None:
+                if data is None or struct.unpack_from('<I', src[which], so + i)[0] != scalar or (
+                    struct.unpack_from('<I', data, i)[0] != scalar and relocs.get(i) != 'func_00100000'):
+                    raise SystemExit(f'{path.name}: verified TLB scalar no longer matches at {i:#x}')
+                out.append(f'    .long {scalar:#010x}')
+                i += 4
+                continue
             if i in relocs:
-                out.append(f"    .long {relocs[i]}")
+                out.append(f"    .long {literal_for(table, relocs[i])}")
                 pointers += 1
                 i += 4
                 continue
@@ -134,6 +147,7 @@ def main():
             copy = data is not None and data[i] == src[which][so + i]
             j = i
             while j < size and j not in relocs and (j == i or j not in at) and \
+                    literal_at(table, j - table_offset) is None and \
                     (data is not None and data[j] == src[which][so + j]) == copy:
                 j += 1
             if copy:
@@ -154,4 +168,5 @@ def main():
     print(f"{len(list(OUT.glob('*.s')))} table files in port/data: {copied} bytes come from the disc, {zeroed} are zero, {pointers} addresses; "
           f"checksum {h:#018x}")
 
-main()
+if __name__ == '__main__':
+    main()

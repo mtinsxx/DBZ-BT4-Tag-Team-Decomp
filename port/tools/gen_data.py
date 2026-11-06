@@ -11,6 +11,7 @@ modulo 16 as on the PS2, so data that must be 16-byte aligned stays aligned.
 Usage: port/tools/gen_data.py [--asm DIR]     DIR = the decompilation's generated asm/ (default ../bt3/asm)
 Output: port/build/gen/data/*.s and the assembled port/build/obj_data/*.o  (generated from the game; never commit)"""
 import argparse, collections, pathlib, re, sys
+from data_literals import literal_for
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 KINDS = ("data", "sdata", "rodata", "lit4", "lit8", "bss", "sbss")
@@ -41,6 +42,7 @@ def symbols():
     return out
 
 def convert(text, kind, addr):
+    table = None
     out = [f".section {SECTION[kind]}", ".p2align 4"]
     if addr & 15:
         out.append(f".space {addr & 15}")
@@ -55,9 +57,10 @@ def convert(text, kind, addr):
             continue
         m = re.match(r"dlabel (\S+)", s)
         if m:
+            table = m.group(1)
             out += [f".globl {m.group(1)}", f"{m.group(1)}:"]
         elif s.startswith(".word"):
-            arg = s[5:].strip()
+            arg = literal_for(table, s[5:].strip())
             out.append("    .long 0" if arg.startswith(".L") else f"    .long {arg}")
         elif s.startswith(".align"):
             out.append(f"    .p2align {s[6:].strip()}")
@@ -132,4 +135,5 @@ def main():
             raise SystemExit(f"{f.name}: {r.stderr[:300]}")
     print(f"{len(list(obj.glob('*.o')))} data objects assembled")
 
-main()
+if __name__ == '__main__':
+    main()

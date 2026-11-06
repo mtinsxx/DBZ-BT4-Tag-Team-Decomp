@@ -23,6 +23,8 @@ extern float guest_fp_native(float);
 extern float guest_fp_indirect(float), native_scale(float);
 extern int guest_fp_variadic(void);
 extern int guest_fp_format(void), guest_rejected_varcallback(void);
+extern int guest_sdk_contracts(void);
+uint32_t D_002D3FE4, D_002D3FE8, D_002D97F4, D_002D97F8, D_002E6F5C, D_002E6F60;
 static int foreign_callback(int *p) { return *p + 1; }
 extern void guest_write(int), guest_copy(void);
 typedef struct { uint32_t prev, next; } GameNode;
@@ -50,6 +52,7 @@ int main(void) {
     assert(guest_null());
     assert(guest_indirect());
     assert(guest_direct());
+    assert(guest_sdk_contracts());
     assert(guest_foreign(foreign_callback, &outside_window) == 12);
     assert(guest_fp_native(3.5f) == 7.0f && guest_fp_variadic() == 4);
     assert(guest_fp_format() == 4);

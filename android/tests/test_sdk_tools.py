@@ -21,7 +21,8 @@ class InventoryTests(unittest.TestCase):
         rows = {row['symbol']: row for row in report['contracts']}
         self.assertEqual([s['offset'] for s in rows['func_002A0C10']['slots']], [0, 24])
         self.assertEqual(rows['func_00100000']['slots'][0]['offset'], 20)
-        self.assertTrue(all(not r['c_candidates'] for r in rows.values()))
+        self.assertEqual(report['pointer_slot_count'], 102)
+        self.assertEqual(rows['func_00100000']['slots'][0]['classification'], 'tlb_entry_hi_literal')
         self.assertEqual(report['tables']['D_002EB190']['incoming'][0]['table'], 'D_002EB330')
 
     def test_addended_data_reference_is_retained(self):
@@ -38,6 +39,52 @@ class InventoryTests(unittest.TestCase):
         result = sdk_audit.compare(original[1:] + ['unexpected_dependency'])
         self.assertEqual(result['resolved'], original[:1])
         self.assertEqual(result['new'], ['unexpected_dependency'])
+
+    def test_tlb_scalar_correction_is_scoped_to_its_data_table(self):
+        sys.path.insert(0, str(sdk_audit.ROOT / 'port/tools'))
+        from data_literals import literal_for, literal_at
+        self.assertEqual(literal_for('D_002EB190', 'func_00100000'), '0x00100000')
+        self.assertEqual(literal_for('OtherTable', 'func_00100000'), 'func_00100000')
+        self.assertEqual(literal_at('D_002EB190', 0x14), 0x100000)
+        self.assertIsNone(literal_at('D_002EB190', 0x10))
+        self.assertIsNone(literal_at('OtherTable', 0x14))
+
+    def test_data_generator_keeps_real_entrypoint_pointers_elsewhere(self):
+        sys.path.insert(0, str(sdk_audit.ROOT / 'port/tools'))
+        import gen_data
+        text = 'dlabel D_002EB190\n.space 20\n.word func_00100000\ndlabel OtherTable\n.word func_00100000\n'
+        result = gen_data.convert(text, 'data', 0x2EB190)
+        self.assertIn('.long 0x00100000', result)
+        self.assertIn('OtherTable:\n    .long func_00100000', result)
+
+    def test_skeleton_regeneration_preserves_scalar_and_original_checksum_partition(self):
+        sys.path.insert(0, str(sdk_audit.ROOT / 'port/tools'))
+        import make_skeleton
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            objects, output = root / 'objects', root / 'output'
+            objects.mkdir()
+            (objects / 'cod_1C3400.data.o').touch()
+            (root / 'config/symbols').mkdir(parents=True)
+            (root / 'gamedata/disc/BIN').mkdir(parents=True)
+            (root / 'gamedata/disc/BIN/DBZP.BIN').write_bytes(b'')
+            # Synthetic table; distinguish its correct source address from
+            # zero-filled candidate locations. No bytes from the owner's ELF.
+            data = bytearray(0x120)
+            data[:20] = bytes(range(1, 21))
+            struct.pack_into('<I', data, 20, 0x100000)
+            image = bytearray(make_skeleton.ROM_END - make_skeleton.ROM_BASE)
+            image[0x2EB190 - 0x100000:0x2EB190 - 0x100000 + len(data)] = data
+            item = ('.data', bytes(data), len(data), [(0, 'D_002EB190', True)], {})
+            with patch.multiple(make_skeleton, ROOT=root, OBJ=objects, OUT=output), \
+                    patch.object(make_skeleton, 'flat_image', return_value=bytes(image)), \
+                    patch.object(make_skeleton, 'read_object', return_value=item):
+                make_skeleton.main()
+            result = (output / 'cod_1C3400.data.s').read_text()
+            self.assertIn('.long 0x00100000', result)
+            self.assertNotIn('func_00100000', result)
+            expected = make_skeleton.fnv(bytes(data[:20] + data[24:]), 0xCBF29CE484222325)
+            self.assertIn(f'checksum {expected:#018x}', (output / 'index.txt').read_text())
 
 
 class EvidenceTests(unittest.TestCase):
