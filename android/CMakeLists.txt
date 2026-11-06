@@ -56,6 +56,9 @@ endif()
 
 if(NOT ANDROID)
     enable_testing()
+    find_package(Python3 3.11 REQUIRED COMPONENTS Interpreter)
+    add_test(NAME sdk_contract_tools COMMAND "${Python3_EXECUTABLE}"
+        -m unittest discover -s "${CMAKE_CURRENT_SOURCE_DIR}/tests" -p test_sdk_tools.py -v)
     add_executable(bt4_android_touch_tests tests/touch_test.c)
     target_link_libraries(bt4_android_touch_tests PRIVATE bt4_android_touch)
     add_test(NAME touchscreen_bridge COMMAND bt4_android_touch_tests)
@@ -73,7 +76,6 @@ if(NOT ANDROID)
     add_test(NAME iso9660_metadata COMMAND bt4_android_iso_tests)
     option(BT4_ENABLE_LLVM_TESTS "Execute the LLVM ELF pointer lowering tests (LLVM 23 and NDK required)" OFF)
     if(BT4_ENABLE_LLVM_TESTS)
-        find_package(Python3 3.11 REQUIRED COMPONENTS Interpreter)
         add_test(NAME llvm_guest_abi COMMAND "${Python3_EXECUTABLE}"
             "${CMAKE_CURRENT_SOURCE_DIR}/tools/test_llvm.py" --build "${CMAKE_CURRENT_BINARY_DIR}/llvm-tests")
     endif()

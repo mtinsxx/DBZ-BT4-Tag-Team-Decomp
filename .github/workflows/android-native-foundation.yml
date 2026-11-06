@@ -21,6 +21,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install pinned R5900 disassembler for synthetic evidence tests
+        run: python -m pip install -r android/requirements-evidence.txt
       - name: Configure
         run: cmake -S android -B build/android-host -DCMAKE_BUILD_TYPE=Debug
       - name: Compile

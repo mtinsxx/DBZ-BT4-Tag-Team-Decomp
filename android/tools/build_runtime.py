@@ -14,7 +14,7 @@ sys.path.insert(0, str(ROOT / 'port/tools'))
 import eeconst
 import ptr32
 import elf_data
-from analyze_link import analyze
+from strict_link import link
 
 
 def shaders(build):
@@ -46,6 +46,10 @@ def main():
     args = parser.parse_args()
     build, game = args.build.resolve(), args.game_build.resolve()
     build.mkdir(parents=True, exist_ok=True)
+    # A failed rebuild must never leave a previous successful library/report.
+    (build / 'libtenkaichi_mobile.so').unlink(missing_ok=True)
+    (build / 'report.json').write_text(json.dumps(dict(stage='preparing', requested=0,
+        compiled=0, failed=['Build preparation has not completed'], linked=False, gameplay_tested=False), indent=2) + '\n')
     game_report = json.loads((game / 'report.json').read_text())
     if game_report['subset'] or game_report['failed'] or game_report['compiled'] != game_report['requested']:
         sys.exit('A complete successfully compiled game archive is required, not a subset or partial archive.')
@@ -167,16 +171,10 @@ def main():
                  '-lSDL3', '-lcurl', '-lssl', '-lcrypto', '-lz', '-ldl', '-llog', '-landroid', '-lm', '-lGLESv3',
                  '-static-libstdc++', '-o', str(output)]
     response.write_text('\n'.join('"' + a.replace('\\', '\\\\').replace('"', '\\"') + '"' for a in link_args))
-    output.unlink(missing_ok=True)
-    (build / 'link.log').write_text('')
-    try:
-        command([tools / 'aarch64-linux-android28-clang++', '@' + str(response)], build / 'link.log')
-        report['linked'] = True
-    finally:
-        if not report['linked']:
-            report['link_errors'] = analyze(build / 'link.log')
-        (build / 'report.json').write_text(json.dumps(report, indent=2) + '\n')
-        print(json.dumps(report, indent=2), flush=True)
+    code = link(build, tools, report)
+    print(json.dumps(report, indent=2), flush=True)
+    if code:
+        sys.exit(code)
 
 
 if __name__ == '__main__': main()

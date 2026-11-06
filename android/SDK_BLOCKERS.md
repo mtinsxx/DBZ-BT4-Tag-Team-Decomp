@@ -1,5 +1,10 @@
 # Remaining SDK link contracts
 
+Follow-up: [SDK investigation and private evidence generation](SDK_INVESTIGATION.md)
+records the 2026-11-06 audit, all 15 table classifications, 103 pointer slots,
+source-selection findings and the Android-only extraction workflow. The
+baseline below remains unresolved; no SDK implementation was guessed.
+
 Observed on 2026-11-05 with the Android LLVM bring-up pipeline.
 
 All 274 original game translation units and all 116 runtime/vendor/Android

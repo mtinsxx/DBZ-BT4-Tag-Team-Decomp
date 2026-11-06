@@ -98,3 +98,10 @@ cmake --build build/android-arm64 --parallel
 The workflow also runs these checks. Only the user can test actual
 gameplay, visuals, controls and performance on their device. Static
 checks and successful builds must never be presented as proof of gameplay.
+
+## SDK investigation
+
+The full ARM64 link remains blocked by 102 SDK/CRI targets. See
+[SDK_INVESTIGATION.md](SDK_INVESTIGATION.md) for the 15-table audit, strict-link
+comparison tool and private R5900 evidence generation from the owner's ELF/ISO.
+This is separate from the passing foundation/module builds above.
