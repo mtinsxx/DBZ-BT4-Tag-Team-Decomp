@@ -15,8 +15,8 @@ methods reference the original skeleton resource symbols; tests supply their
 own synthetic resources.
 
 The original **102-symbol baseline is immutable**. The first reconstructed
-sets resolve **80 baseline entries: 79 actual functions and one wrongly
-classified scalar**, leaving **22 undefined symbols**. No table was removed,
+sets resolve **86 baseline entries: 85 actual functions and one wrongly
+classified scalar**, leaving **16 undefined symbols**. No table was removed,
 no weak/stub symbol was introduced and no callback reference was nulled to
 make the linker pass. The complete library still fails `--no-undefined`.
 
@@ -251,6 +251,7 @@ handlers and the actual stdout route. This does not validate video decoding.
 | MMI pixel kernels | 124/124 | 34 | 68 | 0 |
 | DVD/host field methods | 125/125 | 26 | 76 | 0 |
 | IPU diagnostic leaves | 126/126 | 22 | 80 | 0 |
+| DVD/host metadata and commands | 127/127 | 16 | 86 | 0 |
 
 Each attempt uses the whole 274-unit game archive and `--no-undefined`.
 Logs/reports stay in local build output and are reproduced by the full Actions
@@ -266,18 +267,17 @@ LLVM's optional sanitizer runtime is absent in this workspace. Leak scanning
 is disabled because the managed executor cannot run its ptrace scan; these
 tests do not establish leak freedom or device gameplay.
 
-## Remaining 22 symbols and next work
+## Remaining 16 symbols and next work
 
-- **16 I/O methods**: eight DVD (`dvCi`) and eight host-file (`htCi`). Each
-  group still needs server/update, existence/size, open/read, close/stop and
-  extended-command behavior. DVD calls the original request allocator,
-  read/abort/completion helpers at `0x279D98`, `0x279EC0`, `0x27A368`,
-  `0x27A238`, `0x279E20`; its directory overrides use `0x27D010` and
-  `0x27C7A0`. Host uses the filename/override helpers at `0x27DEB0` and
-  `0x27D5B8`, plus open/seek/read/close RPC wrappers around `0x27AF78`,
-  `0x27B0A8`, `0x27B110`. Native I/O must integrate these contracts with
-  actual ISO/host reads, completion/cancellation, directory overrides and
-  error paths. Returning a plausible descriptor or aliasing ADXF is not valid.
+- **Ten I/O methods**: five DVD (`dvCi`) and five host-file (`htCi`). Each
+  group still needs server/update, open/read and close/stop. Recovered query
+  methods below provide metadata, not request submission or completion. The
+  DVD request allocator/read/abort/completion helpers are at `0x279D98`,
+  `0x279EC0`, `0x27A368`, `0x27A238`, `0x279E20`; host descriptors and
+  override providers still require a verified native handle translation.
+  A directory override's descriptor is not evidence that it can be passed
+  directly to POSIX read/close. Do not fabricate progress or silently ignore
+  override handles.
 - **Six IPU/MPEG parser/decoder entries**: `0x2A09D8`, `0x2A0B18`,
   `0x2A0C20`, `0x2A11E8`, `0x2A1278`, `0x2A1310`. They transitively
   consume bits through `0x29ECB8`/`0x29EEC8`, including IPU command/control
@@ -304,14 +304,14 @@ from a clean Debian 13 environment by Actions run
 [42158816651](https://github.com/mtinsxx/BT4-Native-Android/actions/runs/42158816651):
 9/9 host tests, 3/3 sanitizer contract groups and desktop regressions passed;
 122/122 runtime units compiled and the strict link failed with exactly the
-expected 63 symbols, zero ABS32 and no other linker errors. The newer 80-entry
+expected 63 symbols, zero ABS32 and no other linker errors. The newer 86-entry
 checkpoint has separate local logs and must be checked in its own fresh CI run.
 
 Local final host checks: 12/12 CTest with LLVM enabled; 10/10 SDK Python tool
 tests; 6/6 SDK contract groups under ASan/UBSan; 81/81 desktop regressions.
 The original Mach-O lowering test still emits its ARM64 object. The pixel
 oracle and synthetic callbacks are unit evidence, not commercial-data execution
-or an on-device test. The native Android runtime has 126 source units now.
+or an on-device test. The native Android runtime has 127 source units now.
 
 ## LLVM callback regression discovered after the 80-entry checkpoint
 
@@ -334,3 +334,41 @@ a checked foreign libc pointer: skipping its edge returns normally, selecting
 it triggers the existing range guard. The end-to-end callback case and the
 explicit IR regressions pass; the Mach-O ARM64 object is still emitted. This
 fix does not resolve more SDK symbols or establish decoder/gameplay behavior.
+
+## Six DVD/host query and command methods
+
+`bt4_sdk_ci_query.c` implements `dvCiGetFileSize`, `0x27BDD8`, `0x27C680`,
+`0x28B850`, `0x28B8F0` and `0x28C288`. The shared override lookup is recovered
+from `0x27CE20`/`0x27DDC0`: compact table base, entry count, names offset in
+8-byte units, stride-minus-one, two 32-bit words per entry. DVD matches ASCII
+case-insensitively with slash normalization; host matches case-sensitively
+with slash normalization. Zero-size entries fall back to the real provider.
+DVD also preserves the imported whole-disc sentinel and the 17-character
+hex-sector/hex-count filename form. All path prefixes/suffixes and error text
+remain references to imported resources, not embedded game bytes.
+
+Native DVD metadata reuses `Bt4Iso_Find` on `BT4_ISO`. Host metadata maps the
+recovered host-device/base path into `Port_FileSize`, retaining the existing
+extracted-data cache and its mod/alias precedence. This deliberately follows
+the native port's immutable-content cache semantics; it does not promise fresh
+filesystem stats after an external edit to an already cached file. Querying
+real files does not supply the missing asynchronous request/handle provider.
+Oversized constructed paths fail through the appropriate error path instead
+of overflowing the original fixed buffers.
+
+Extended commands retain their different meanings: DVD 202/204/301 are genuine
+constant-zero leaves, 203/205 query a filename, 302 reads work+4. Host splits
+64-bit file sizes and caps completed bytes by the file size using unsigned
+comparison, including the original sign extension of override size words.
+Both use command 299 for a non-null capability query, unlike memory-file's 401.
+DVD command lookup failure does not invoke the named size getter's callback.
+
+Targeted tests run the actual ISO reader and `plat_fcache.c` against synthetic
+ISO/files, a sparse file of 0x180000035 bytes, native mod/alias selection,
+multiple override records, zero-size fallback, negative/overflow byte counts,
+missing files, callback distinctions, capability commands and overlong paths.
+Only unrelated stage/song/state services are isolated test fixtures; production
+links their existing implementations. The query group passes warnings-as-errors
+and ASan/UBSan. After the group, the one final complete ARM64 build compiled
+274/274 game and 127/127 runtime units; strict link failed with exactly 16
+original symbols, no new undefined symbols, zero ABS32 and no other errors.

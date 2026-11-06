@@ -33,6 +33,7 @@ static void ipi(uint32_t c, const char *m, uint32_t h) { assert(c == 0xF1234567u
 static void iip(uint32_t c, uint32_t m, void *h) { assert(c == 0xF1234567u); capture(Bt4Cri_Pointer(m),h); }
 static void iii(uint32_t c, uint32_t m, uint32_t h) { assert(c == 0xF1234567u); capture(Bt4Cri_Pointer(m),Bt4Cri_Pointer(h)); }
 extern void test_file_fields(void);
+extern void test_ci_queries(void);
 
 int main(void) {
     char name[20];
@@ -104,5 +105,6 @@ int main(void) {
     assert(func_0027FCD0(NULL) == 0 && func_0027FD08(NULL) == 0 && func_0027FDC0(NULL) == 0);
     func_0027F9B8(NULL);
     test_file_fields();
+    test_ci_queries();
     return 0;
 }

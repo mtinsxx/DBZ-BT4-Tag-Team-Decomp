@@ -5,9 +5,21 @@
   "validation_scope": "Recovered EE register/memory contracts and synthetic host tests; no gameplay/device validation",
   "functions": [
     {
+      "symbol": "dvCiGetFileSize",
+      "native_signature": "int32_t dvCiGetFileSize(const char *name)",
+      "source": "android/src/bt4_sdk_ci_query.c",
+      "status": "reconstructed"
+    },
+    {
       "symbol": "func_0027BD48",
       "native_signature": "void func_0027BD48(uint32_t callback, uint32_t context)",
       "source": "android/src/bt4_sdk_fields.c",
+      "status": "reconstructed"
+    },
+    {
+      "symbol": "func_0027BDD8",
+      "native_signature": "int32_t func_0027BDD8(const char *name)",
+      "source": "android/src/bt4_sdk_ci_query.c",
       "status": "reconstructed"
     },
     {
@@ -38,6 +50,12 @@
       "symbol": "func_0027C4E8",
       "native_signature": "int32_t func_0027C4E8(const Bt4DvdCiWork *file)",
       "source": "android/src/bt4_sdk_file_fields.c",
+      "status": "reconstructed"
+    },
+    {
+      "symbol": "func_0027C680",
+      "native_signature": "int32_t func_0027C680(const void *target, int32_t command)",
+      "source": "android/src/bt4_sdk_ci_query.c",
       "status": "reconstructed"
     },
     {
@@ -281,6 +299,18 @@
       "status": "reconstructed"
     },
     {
+      "symbol": "func_0028B850",
+      "native_signature": "int32_t func_0028B850(const char *name)",
+      "source": "android/src/bt4_sdk_ci_query.c",
+      "status": "reconstructed"
+    },
+    {
+      "symbol": "func_0028B8F0",
+      "native_signature": "int32_t func_0028B8F0(const char *name)",
+      "source": "android/src/bt4_sdk_ci_query.c",
+      "status": "reconstructed"
+    },
+    {
       "symbol": "func_0028BDC8",
       "native_signature": "int32_t func_0028BDC8(Bt4HostCiWork *file, int32_t offset, int32_t origin)",
       "source": "android/src/bt4_sdk_file_fields.c",
@@ -308,6 +338,12 @@
       "symbol": "func_0028C160",
       "native_signature": "int32_t func_0028C160(const Bt4HostCiWork *file)",
       "source": "android/src/bt4_sdk_file_fields.c",
+      "status": "reconstructed"
+    },
+    {
+      "symbol": "func_0028C288",
+      "native_signature": "int32_t func_0028C288(const void *target, int32_t command)",
+      "source": "android/src/bt4_sdk_ci_query.c",
       "status": "reconstructed"
     },
     {
