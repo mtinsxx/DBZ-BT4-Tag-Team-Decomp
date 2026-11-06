@@ -13,7 +13,7 @@ PORT_HOST static pthread_mutex_t lock;
 PORT_HOST static pthread_once_t once = PTHREAD_ONCE_INIT;
 
 static void *decode(uint32_t word) {
-    return word ? (void *)((uintptr_t)Port_Window + word) : NULL;
+    return Bt4Android_DecodePointer(word);
 }
 void *Bt4Cri_Pointer(uint32_t address) { return decode(address); }
 
@@ -61,6 +61,29 @@ void Bt4Cri_ObjectError(uint32_t callback, uint32_t context, int32_t code) {
             ((void (*)(uint32_t, int32_t))function)(context, code);
         else
             ((void (*)(void *, int32_t))function)(decode(context), code);
+    }
+}
+
+void Bt4Cri_DriverError(uint32_t callback, uint32_t context, const char *message, void *handle) {
+    void *function;
+    unsigned kinds;
+    uint32_t message_word = 0, handle_word = 0;
+    if (!callback) return;
+    function = decode(callback);
+    kinds = (Bt4Android_CallKind(function, 1) == 'i' ? 4u : 0u) |
+            (Bt4Android_CallKind(function, 2) == 'i' ? 2u : 0u) |
+            (Bt4Android_CallKind(function, 3) == 'i' ? 1u : 0u);
+    if (kinds & 2) message_word = Bt4Android_EncodePointer(message);
+    if (kinds & 1) handle_word = Bt4Android_EncodePointer(handle);
+    switch (kinds) {
+    case 0: ((void (*)(void *, const char *, void *))function)(decode(context), message, handle); break;
+    case 1: ((void (*)(void *, const char *, uint32_t))function)(decode(context), message, handle_word); break;
+    case 2: ((void (*)(void *, uint32_t, void *))function)(decode(context), message_word, handle); break;
+    case 3: ((void (*)(void *, uint32_t, uint32_t))function)(decode(context), message_word, handle_word); break;
+    case 4: ((void (*)(uint32_t, const char *, void *))function)(context, message, handle); break;
+    case 5: ((void (*)(uint32_t, const char *, uint32_t))function)(context, message, handle_word); break;
+    case 6: ((void (*)(uint32_t, uint32_t, void *))function)(context, message_word, handle); break;
+    case 7: ((void (*)(uint32_t, uint32_t, uint32_t))function)(context, message_word, handle_word); break;
     }
 }
 

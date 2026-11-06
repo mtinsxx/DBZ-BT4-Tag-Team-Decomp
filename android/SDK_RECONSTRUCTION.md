@@ -15,8 +15,8 @@ methods reference the original skeleton resource symbols; tests supply their
 own synthetic resources.
 
 The original **102-symbol baseline is immutable**. The first reconstructed
-sets resolve **39 baseline entries: 38 actual functions and one wrongly
-classified scalar**, leaving **63 undefined symbols**. No table was removed,
+sets resolve **68 baseline entries: 67 actual functions and one wrongly
+classified scalar**, leaving **34 undefined symbols**. No table was removed,
 no weak/stub symbol was introduced and no callback reference was nulled to
 make the linker pass. The complete library still fails `--no-undefined`.
 
@@ -136,6 +136,68 @@ the actual registered integer/pointer ABI; compact contexts are not passed as
 untranslated host addresses. Original error IDs/descriptions are referenced
 through imported symbols, without shipping their values.
 
+## Memory-file driver: 13 additional entries
+
+`D_002D9800` dispatches a memory-backed Ci driver, not a host pathname API.
+The recovered handle is 0x38 bytes with a 20-byte serialized name, signed-byte
+status, sector geometry, position, read count and current request fields.
+The original pool at `D_002D9868` has 40 handles. `mfCiOpen`/`mfCiReqRd` and
+all remaining table methods are implemented in `bt4_sdk_mf.c`.
+
+Names encode a compact guest hexadecimal address, any one non-hex delimiter,
+and a hexadecimal byte length. The parser's second conversion follows the
+original 64-bit strtoul result before truncation to 32 bits. Seek origins,
+clamping, synchronous completion, signed status, busy/zero-count paths, sector
+resizing and commands 201/203/205/401 retain their observed contracts. Commands
+203/205 take a filename directly, unlike command 201's handle argument.
+The server method `0x27F7A0` scans active entries; its original per-entry helper
+at `0x27F798` is genuinely just return/nop. Reads already finish synchronously;
+no fabricated asynchronous completion was added.
+
+Two native safety changes are explicit: Open rejects names that would overflow
+the 20-byte field, and Read copies only valid backing bytes before zero-filling
+the rounded sector tail. The original copied the full rounded span first,
+which could overread an unpadded allocation. Final bytes match for valid,
+non-overlapping source/destination ranges. Synthetic tests read a 53-byte
+allocation into a 2048-byte sector under ASan, check guard bytes, pool exhaustion,
+seek/status/commands and all eight integer/pointer combinations of the original
+three-argument driver error callback. Original error resource values remain
+external; no commercial strings are included.
+
+## Sixteen MMI pixel kernels: native scalar reconstruction
+
+`bt4_sdk_pixels.c` implements all 16 entries in `D_002E7788`/`D_002E77A8`.
+The 0x1c-byte argument record carries compact destination/source addresses,
+shift, two heights and stride. These are ahead-of-time C algorithms, without
+PS2 instruction interpretation or dynamic code translation.
+
+| Modes | Luma entry | Chroma entry |
+| --- | --- | --- |
+| Copy | 0x29F2F8 | 0x29F370 |
+| Vertical | 0x29F408 | 0x29F4C0 |
+| Horizontal | 0x29F590 | 0x29F640 |
+| Bilinear | 0x29F6F8 | 0x29F7F0 |
+| Copy + destination blend | 0x29F8F0 | 0x29F990 |
+| Vertical + blend | 0x29FA40 | 0x29FB20 |
+| Horizontal + blend | 0x29FC08 | 0x29FCE0 |
+| Bilinear + blend | 0x29FDB0 | 0x29FED0 |
+
+Recovered semantics include QFSRV shifts/rotation, separate chroma planes,
+16-bit outputs, source/destination strides and the second-height source jump.
+Vertical filters retain the previous sample across that jump. Integer rounding
+follows the actual instructions: PADDH wrap, logical PSRLH, signed-positive
+conditional bias in chroma and the upper luma vertical/horizontal lanes.
+The blended luma bilinear routine changes its interpolation bias from two to
+one after the first output. Chroma vertical second-phase gating uses the low
+16 height bits. These observed differences are preserved explicitly.
+
+Tests compare all 16 kernels against an independent pixel-coordinate oracle:
+1,536 randomized mode/shift/geometry cases plus explicit golden rounding,
+wrap, zero-height and phase-mask cases, checking whole destination buffers.
+This proves the documented scalar contracts against the test oracle, not
+execution equivalence measured on a console or a gameplay result. SIMD/NEON
+optimization remains future work after the scalar baseline.
+
 ## Actual intermediate strict-link results
 
 | Set | Runtime units compiled | Remaining | Resolved from original 102 | New undefined |
@@ -146,6 +208,8 @@ through imported symbols, without shipping their values.
 | SJMEM and shared native CRI support | 120/120 | 79 | 23 | 0 |
 | SJRBF | 121/121 | 72 | 30 | 0 |
 | SJUNI | 122/122 | 63 | 39 | 0 |
+| Memory-file driver | 123/123 | 50 | 52 | 0 |
+| MMI pixel kernels | 124/124 | 34 | 68 | 0 |
 
 Each attempt uses the whole 274-unit game archive and `--no-undefined`.
 Logs/reports stay in local build output and are reproduced by the full Actions
@@ -161,15 +225,12 @@ LLVM's optional sanitizer runtime is absent in this workspace. Leak scanning
 is disabled because the managed executor cannot run its ptrace scan; these
 tests do not establish leak freedom or device gameplay.
 
-## Remaining 63 symbols and next work
+## Remaining 34 symbols and next work
 
-- **37 file-driver entries**: DVD (`dvCi`), memory-file (`mfCi`) and host-file
-  (`htCi`). Registration and sector-size leaves are implemented; open/read,
-  seek/status, completion and directory/provider dependencies still need full
-  reconstruction/adaptation. They are not blindly aliased to ADXF functions.
-- **16 R5900 MMI pixel/interpolation kernels** in `D_002E7788` / `D_002E77A8`:
-  packed loads, alignment shifts, byte expansion and interpolation need portable
-  scalar/NEON equivalents and pixel-exact tests.
+- **24 file-driver entries**: 12 DVD (`dvCi`) and 12 host-file (`htCi`).
+  Open/read, seek/status, completion and directory/provider dependencies still
+  need reconstruction and a verified native I/O boundary. They are not blindly
+  aliased to ADXF methods or headless sce* test implementations.
 - **10 IPU/MPEG dispatch targets** in `D_002FAA08`: original methods access
   IPU control/command registers (`0x10002010` / `0x10002000`) and bitstream
   helpers. They need a verified native decoder boundary, not mapped PS2
@@ -180,3 +241,11 @@ implementation. The main ELF now supplies the evidence; no additional file is
 required to continue this SDK analysis. Later full data/overlay integration
 still needs the owner's compatible resources. Full link, initialization,
 JNI/lifecycle, Vulkan presentation and an APK remain subsequent work.
+
+The earlier published checkpoint (engine `693381a`, main `ecb25d9`) was rebuilt
+from a clean Debian 13 environment by Actions run
+[42158816651](https://github.com/mtinsxx/BT4-Native-Android/actions/runs/42158816651):
+9/9 host tests, 3/3 sanitizer contract groups and desktop regressions passed;
+122/122 runtime units compiled and the strict link failed with exactly the
+expected 63 symbols, zero ABS32 and no other linker errors. The newer 68-entry
+checkpoint has separate local logs and must be checked in its own fresh CI run.

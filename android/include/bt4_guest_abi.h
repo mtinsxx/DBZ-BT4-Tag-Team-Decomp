@@ -3,6 +3,9 @@
 #include <stddef.h>
 #include <stdint.h>
 extern void *Port_Window;
+static inline void *Bt4Android_DecodePointer(uint32_t address) {
+    return address ? (void *)((uintptr_t)Port_Window + (uintptr_t)address) : NULL;
+}
 
 /* ABI shared with the LLVM ELF pass. No guest pointers occur in these records. */
 typedef struct Bt4AbiEntry {

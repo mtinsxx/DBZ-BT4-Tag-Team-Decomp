@@ -39,6 +39,8 @@ int main(void) {
     uint32_t offset = 99;
     int outside_window = 11;
     assert(Bt4Android_TryEncodePointer(NULL, &offset) == 0 && offset == 0);
+    assert(Bt4Android_DecodePointer(0) == NULL);
+    assert(Bt4Android_DecodePointer(0x20000000u) == (char *)Port_Window + 0x20000000u);
     assert(Bt4Android_TryEncodePointer(Port_Window, &offset) == -1);
     assert(Bt4Android_TryEncodePointer((char *)Port_Window - 1, &offset) == -1);
     assert(Bt4Android_TryEncodePointer((char *)Port_Window + UINT64_C(0x100000000), &offset) == -1);

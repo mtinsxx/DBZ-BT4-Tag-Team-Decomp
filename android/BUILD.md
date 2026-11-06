@@ -95,10 +95,10 @@ The final `link.log` retains every unresolved symbol if linkage fails.
 sources, headers and flags are unchanged; it always reruns lowering/codegen.
 It must not be used to conceal a failed or stale frontend stage.
 
-The current complete link remains blocked by **63 legacy SDK/CRI symbols**
+The current complete link remains blocked by **34 legacy SDK/CRI symbols**
 referenced by the original data tables, down from the fixed 102-symbol baseline.
-See [SDK_RECONSTRUCTION.md](SDK_RECONSTRUCTION.md) for the 38 real functions
-and verified TLB scalar correction. All 274 game and 122 runtime/vendor
+See [SDK_RECONSTRUCTION.md](SDK_RECONSTRUCTION.md) for the 67 real functions
+and verified TLB scalar correction. All 274 game and 124 runtime/vendor
 translation units compile; the link still fails. See [SDK_BLOCKERS.md](SDK_BLOCKERS.md).
 There is no complete engine `.so` or APK to install.
 

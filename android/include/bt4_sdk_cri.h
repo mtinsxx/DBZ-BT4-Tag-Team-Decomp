@@ -37,6 +37,7 @@ void Bt4Cri_Error(const char *id, const char *description);
 void Bt4Cri_ObjectError(uint32_t callback, uint32_t context, int32_t code);
 void Bt4Cri_Copy(uint32_t destination, uint32_t source, uint32_t bytes);
 void *Bt4Cri_Pointer(uint32_t address);
+void Bt4Cri_DriverError(uint32_t callback, uint32_t context, const char *message, void *handle);
 
 void func_002826A0(Bt4SjMem *object);
 uint32_t func_00282758(Bt4SjMem *object);
