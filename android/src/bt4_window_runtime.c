@@ -44,8 +44,8 @@ int Bt4Android_WindowConfigure(void) {
     return 0;
 }
 
-/* Port_MapMemory is a constructor which may copy guest data before making
- * mappings. Initialize the base first so that Port_Ptr never sees NULL.
+/* Compact table/data constructors need the window before encoding addresses.
+ * Memory mappings and user-data import are deferred until SDL_main.
  */
 __attribute__((constructor(101))) static void Bt4Android_EarlyWindow(void) {
     (void)Bt4Android_WindowConfigure();

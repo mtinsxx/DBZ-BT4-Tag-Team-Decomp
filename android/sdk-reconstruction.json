@@ -491,6 +491,18 @@
       "status": "reconstructed"
     },
     {
+      "symbol": "func_002A09D8",
+      "native_signature": "void func_002A09D8(void *decoder)",
+      "source": "android/src/bt4_sdk_ipu.c",
+      "status": "reconstructed"
+    },
+    {
+      "symbol": "func_002A0B18",
+      "native_signature": "void func_002A0B18(void *decoder)",
+      "source": "android/src/bt4_sdk_ipu.c",
+      "status": "reconstructed"
+    },
+    {
       "symbol": "func_002A0C00",
       "native_signature": "int32_t func_002A0C00(const void *decoder)",
       "source": "android/src/bt4_sdk_ipu_error.c",
@@ -503,6 +515,12 @@
       "status": "reconstructed"
     },
     {
+      "symbol": "func_002A0C20",
+      "native_signature": "void func_002A0C20(void *decoder)",
+      "source": "android/src/bt4_sdk_ipu.c",
+      "status": "reconstructed"
+    },
+    {
       "symbol": "func_002A0E08",
       "native_signature": "int32_t func_002A0E08(const void *decoder)",
       "source": "android/src/bt4_sdk_ipu_error.c",
@@ -512,6 +530,24 @@
       "symbol": "func_002A0E18",
       "native_signature": "int32_t func_002A0E18(const void *decoder)",
       "source": "android/src/bt4_sdk_ipu_error.c",
+      "status": "reconstructed"
+    },
+    {
+      "symbol": "func_002A11E8",
+      "native_signature": "void func_002A11E8(void *decoder)",
+      "source": "android/src/bt4_sdk_ipu.c",
+      "status": "reconstructed"
+    },
+    {
+      "symbol": "func_002A1278",
+      "native_signature": "void func_002A1278(void *decoder)",
+      "source": "android/src/bt4_sdk_ipu.c",
+      "status": "reconstructed"
+    },
+    {
+      "symbol": "func_002A1310",
+      "native_signature": "void func_002A1310(void *decoder)",
+      "source": "android/src/bt4_sdk_ipu.c",
       "status": "reconstructed"
     },
     {

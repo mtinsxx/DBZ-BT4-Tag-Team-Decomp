@@ -1,7 +1,8 @@
 # Android native port — engineering status
 
-This directory is the beginning of a **real native ARM64 port**, not a
-standalone Android game and not a simulated launcher.
+This directory contains the **native ARM64 engine port**. The complete strict
+link now passes; the wrapper builds an experimental SDL3 Android APK. No
+on-device boot, graphics or gameplay has been established.
 
 ## Completed in this stage
 - Added a thread-safe, complete-snapshot touchscreen-to-libpad2 bridge.
@@ -20,19 +21,24 @@ standalone Android game and not a simulated launcher.
 - Compiled all 274 original game C translation units to ARM64 objects.
 - Strictly linked an explicitly labelled subset containing the original
   alignment and intrusive-list implementations (not the complete game).
-- Compiled all 128 runtime/vendor/Android translation units, including the
+- Compiled all 132 runtime/vendor/Android translation units, including the
   existing GS/VU1, SDL GPU/Vulkan, audio, menu and network sources.
 - Removed assembly-table ABS32 relocations with checked startup fixups;
   direct native/software-float boundaries have integer-bit adapters.
 - Implemented real ISO9660 metadata lookup for `sceCdSearchFile`, verified
   with synthetic data. No commercial ISO or assets are included.
 
-## Not completed / not claimed
-- Android runtime and shared-library link of the game's original code.
-- Complete runtime ABI/data/stack integration and execution on Android ARM64.
-- Vulkan swapchain and Android SDL3 platform integration.
-- Android Activity, touch event UI, JNI calls, ISO preparation.
-- APK packaging, gameplay validation or performance measurements.
+## Current integration and limits
+- All 102 SDK baseline entries resolved (101 functions + one verified scalar).
+- Complete `libtenkaichi_mobile.so` linked with `--no-undefined`, not a subset.
+- Explicit Android mappings, checked skeleton-data import and guest-stack entry.
+- SDL3 Activity/JNI and the existing Vulkan GS/VU1 renderer connected in the wrapper.
+- Experimental APK assembled, signed and verified by pinned SDK tools.
+- No phone execution: boot, presentation, movies, controls and performance need
+  owner testing. Touch UI, state-list integration and direct ISO extraction are
+  not complete. The six IPU parsers are not a complete new MPEG-2 video decoder.
+
+See [SDK_RECONSTRUCTION.md](SDK_RECONSTRUCTION.md) and [ANDROID_BOOT.md](ANDROID_BOOT.md).
 
 ## Address-window module
 

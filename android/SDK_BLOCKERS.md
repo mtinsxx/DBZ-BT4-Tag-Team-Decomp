@@ -1,8 +1,8 @@
 # Original 102 SDK link contracts (comparison baseline)
 
 Current result after private analysis of the owner's verified main executable:
-**6 undefined symbols remain**. See [SDK_RECONSTRUCTION.md](SDK_RECONSTRUCTION.md)
-for the 95 actual function implementations, TLB scalar correction, contracts,
+**0 undefined symbols remain; the complete ARM64 library links with `--no-undefined`**. See [SDK_RECONSTRUCTION.md](SDK_RECONSTRUCTION.md)
+for the 101 actual function implementations, TLB scalar correction, contracts,
 tests and intermediate strict-link results. The original inventory below stays
 unchanged for name-by-name comparisons; it is not the current unresolved count.
 

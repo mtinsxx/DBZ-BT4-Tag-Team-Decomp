@@ -33,8 +33,9 @@ static uint32_t word(const void *base, unsigned offset) {
     }
 #define INTEGER_RESULT(expression) return (expression)
 #define POINTER_RESULT(expression) return (int32_t)Bt4Android_EncodePointer(expression)
+#define VOID_RESULT(expression) do { expression; return 0; } while (0)
 
-static int32_t dispatch(void *callback, uint32_t handle_word, uint32_t *event, uint32_t context_word) {
+static int32_t dispatch(void *callback, uint32_t handle_word, uint32_t *event, uint32_t context_word, int input) {
     unsigned slot;
     for (slot = 1; slot <= 3; ++slot) {
         int kind = Bt4Android_CallKind(callback, slot);
@@ -50,13 +51,14 @@ static int32_t dispatch(void *callback, uint32_t handle_word, uint32_t *event, u
     case 0: /* unregistered native callback: the recovered integer-return contract */
     case 'i': DISPATCH(int32_t, INTEGER_RESULT); break;
     case 'p': DISPATCH(void *, POINTER_RESULT); break;
+    case 'v': if (input) { DISPATCH(void, VOID_RESULT); } break;
     }
     /* No inferred floating/64-bit callback ABI; fail explicitly rather than
        calling through an incompatible function pointer. */
     abort();
 }
 
-static int32_t report(const void *decoder, const char *message) {
+int32_t Bt4Ipu_Report(const void *decoder, const char *message) {
     uint32_t handle_word = word(decoder, 0x868); /* original probes before its null check */
     if (handle_word && word(decoder, 0x0C)) {
         void *handle = Bt4Android_DecodePointer(handle_word);
@@ -73,7 +75,7 @@ static int32_t report(const void *decoder, const char *message) {
         if (!event) abort();
         event[0] = 0;
         event[1] = Bt4Android_EncodePointer(message);
-        result = dispatch(Bt4Android_DecodePointer(callback_word), handle_word, event, word(table, 0x10));
+        result = dispatch(Bt4Android_DecodePointer(callback_word), handle_word, event, word(table, 0x10), 0);
         Port_LowFree(event);
         return result;
     }
@@ -81,7 +83,20 @@ static int32_t report(const void *decoder, const char *message) {
     return printf(D_002FA6D0, message);
 }
 
-int32_t func_002A0C00(const void *decoder) { return report(decoder, D_002FA950); }
-int32_t func_002A0C10(const void *decoder) { return report(decoder, D_002FA980); }
-int32_t func_002A0E08(const void *decoder) { return report(decoder, D_002FA998); }
-int32_t func_002A0E18(const void *decoder) { return report(decoder, D_002FA9D0); }
+int Bt4Ipu_RequestInput(const void *decoder) {
+    uint32_t outer = word(decoder, 0x868), callback, *event;
+    void *table;
+    if (!outer) return 0;
+    table = Bt4Android_DecodePointer(word(Bt4Android_DecodePointer(outer), 0x40));
+    if (!table || !(callback = word(table, 0x18))) return 0;
+    event = Port_LowAlloc(8);
+    if (!event) abort();
+    event[0] = 1; event[1] = 0; /* only type is defined by the original input event */
+    (void)dispatch(Bt4Android_DecodePointer(callback), outer, event, word(table, 0x1C), 1);
+    Port_LowFree(event);
+    return 1;
+}
+int32_t func_002A0C00(const void *decoder) { return Bt4Ipu_Report(decoder, D_002FA950); }
+int32_t func_002A0C10(const void *decoder) { return Bt4Ipu_Report(decoder, D_002FA980); }
+int32_t func_002A0E08(const void *decoder) { return Bt4Ipu_Report(decoder, D_002FA998); }
+int32_t func_002A0E18(const void *decoder) { return Bt4Ipu_Report(decoder, D_002FA9D0); }

@@ -627,6 +627,7 @@ void Port_HeapRegion(uint8_t **base, uint32_t *size) {
 #if PORT_LOW_REGION
 static void low_region_take(void);
 #endif
+#ifndef __ANDROID__
 __attribute__((constructor)) static void Port_MapMemory(void) {
 #ifdef _WIN32
     /* The program only works at the address it was linked for (the game's pointers are 4 bytes and absolute). It
@@ -674,6 +675,49 @@ __attribute__((constructor)) static void Port_MapMemory(void) {
     map(0x70000000u, 0x4000, "the scratchpad");
     gPortStage = "memory ready, before the program's main";
 }
+#endif
+
+#ifdef __ANDROID__
+/* Called explicitly after the Activity configures private storage. dlopen must
+   neither read desktop paths nor reserve game memory. Roll back our mappings
+   on collision; never replace mappings owned by Android/other libraries. */
+int Port_AndroidMemoryPrepare(void) {
+    static const uint32_t ranges[][2] = {
+        {HEAP_BASE, HEAP_END-HEAP_BASE}, {STACK_BASE, STACK_SIZE},
+        {LOW_ARENA_BASE, LOW_ARENA_SIZE}, {0x10000000,0x10000},
+        {0x12000000,0x2000}, {0x70000000,0x4000}
+    };
+    void *mapped[6] = {0};
+    Bt4AddressWindow window;
+    size_t i;
+    long page = sysconf(_SC_PAGESIZE);
+    if (sLowArena != NULL) return 0;
+    if (page <= 0 || Bt4Android_WindowConfigure() != 0 ||
+        Bt4Addr_Init(&window, PORT_WINDOW) != BT4_ADDR_OK) return -1;
+    gPortStage = "Android: reserving guest memory";
+    for (i=0;i<6;++i) {
+        if (Bt4Addr_MapWritable(&window,ranges[i][0],ranges[i][1],&mapped[i]) != BT4_ADDR_OK) {
+            while (i) {
+                uintptr_t start=(uintptr_t)mapped[--i],aligned=start&~((uintptr_t)page-1);
+                size_t size=(start-aligned+ranges[i][1]+(size_t)page-1)&~((size_t)page-1);
+                munmap((void *)aligned,size);
+            }
+            gPortStage = "Android: guest mapping collision";
+            return -1;
+        }
+    }
+    sLowArena=mapped[2];sLowNext=sLowArena;
+    gPortStage = "Android: guest memory ready; data not imported";
+    return 0;
+}
+int Port_AndroidRunGame(void) {
+    extern int Bt4Android_CallGame(void *);
+    if (sLowArena == NULL) return -1;
+    sGameStackTop=(uint8_t *)Port_Ptr(STACK_BASE+STACK_SIZE);
+    gPortStage="Android: entering Game_Main on guest stack";
+    return Bt4Android_CallGame(sGameStackTop);
+}
+#endif
 
 /* The game's malloc (include/port_compat.h renames it): a bump allocator over the heap region, 16-byte aligned. */
 void *Port_Malloc(uint32_t size) {

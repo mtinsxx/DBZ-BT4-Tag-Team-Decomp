@@ -154,6 +154,11 @@ def main():
             command([tools / 'aarch64-linux-android28-clang', '-fPIC', '-O2',
                      '-I' + str(ROOT / 'android/include'), '-c', relocation, '-o', reloc_obj], build / 'data.log')
             objects.append(reloc_obj)
+    imports = elf_data.import_table(ROOT, build)
+    imports_obj = build / 'game_data_imports.o'
+    command([tools / 'aarch64-linux-android28-clang', '-O2', '-fPIC',
+             '-I' + str(ROOT / 'android/include'), '-c', imports, '-o', imports_obj], build / 'data.log')
+    objects.append(imports_obj)
     report = dict(requested=len(sources), compiled=sum(bool(obj) for obj, _ in compiled),
                   failed=failed, linked=False, gameplay_tested=False)
     (build / 'report.json').write_text(json.dumps(report, indent=2) + '\n')

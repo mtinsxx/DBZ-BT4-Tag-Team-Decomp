@@ -15,10 +15,10 @@ methods reference the original skeleton resource symbols; tests supply their
 own synthetic resources.
 
 The original **102-symbol baseline is immutable**. The first reconstructed
-sets resolve **96 baseline entries: 95 actual functions and one wrongly
-classified scalar**, leaving **6 undefined symbols**. No table was removed,
+sets now resolve **102 baseline entries: 101 actual functions and one wrongly
+classified scalar**, leaving **0 undefined symbols**. No table was removed,
 no weak/stub symbol was introduced and no callback reference was nulled to
-make the linker pass. The complete library still fails `--no-undefined`.
+make the linker pass. The complete library passes `--no-undefined` (274 game units, 132 runtime units).
 
 [sdk-reconstruction.json](sdk-reconstruction.json) lists every reconstructed
 function, its native signature and source file. These are native ABI adapters
@@ -253,6 +253,8 @@ handlers and the actual stdout route. This does not validate video decoding.
 | IPU diagnostic leaves | 126/126 | 22 | 80 | 0 |
 | DVD/host metadata and commands | 127/127 | 16 | 86 | 0 |
 | DVD/host native I/O | 128/128 | 6 | 96 | 0 |
+| IPU payload parsers + native input | 130/130 | 0 | 102 | 0 |
+| Explicit Android bootstrap + data import | 132/132 | 0 | 102 | 0 |
 
 Each attempt uses the whole 274-unit game archive and `--no-undefined`.
 Logs/reports stay in local build output and are reproduced by the full Actions
@@ -268,7 +270,7 @@ LLVM's optional sanitizer runtime is absent in this workspace. Leak scanning
 is disabled because the managed executor cannot run its ptrace scan; these
 tests do not establish leak freedom or device gameplay.
 
-## Remaining six symbols and next work
+## Previous checkpoint: six pending symbols (superseded below)
 
 DVD/host dispatch targets are now implemented. The remaining six symbols
 belong to the MPEG-2 extension dispatch table, described below.
@@ -484,3 +486,74 @@ records. No guessed bridge or zero-returning bit reader has been added.
 The supplied main ELF contains the instructions needed to continue. Remaining
 work is native implementation and validation of this bridge, not another file
 upload. No video/gameplay execution has been validated.
+
+## Current milestone: all six IPU extension parsers implemented
+
+The previous six-symbol checkpoint above is superseded. `bt4_sdk_ipu.c` now
+implements all six targets, with native `void(void *decoder)` contracts. The
+original dispatcher at 0x2A0E28 calls the table target and immediately aligns
+the bitstream; its return value is unused. These are payload handlers, not
+whole-frame decoders. The earlier IPU error leaves remain unchanged in meaning.
+
+| Target | Reconstructed behavior |
+| --- | --- |
+| 0x2A09D8 | Sequence fields, profile/chroma diagnostics, progressive state, dimension and bitrate extensions; original unsigned wrap arithmetic retained |
+| 0x2A11E8 | Conditional color-description consumption, matrix coefficients and 14-bit display dimensions |
+| 0x2A0B18 | Luma matrix flags and two 64-byte matrix loads at the current bit position; reports the original unsupported chroma-matrix flags without guessing extra payload consumption |
+| 0x2A1278 | Copyright payload: widths 1/8/1/7/1/20/1/22/1/22, including the original discarded/marker fields |
+| 0x2A0C20 | Four f_code values, DC precision, structure, prediction/scan flags, preserved first-structure cache and optional composite-display payload |
+| 0x2A1310 | One to three unsigned horizontal/vertical display offsets according to progressive, structure, repeat and top-field-first state |
+
+The native `bt4_ipu_input.c` backend supplies the missing transitive behavior,
+not an undefined Sony bit-reader call. It copies exactly the declared input
+length into compact-heap chunks, reads MSB-first across fragmented input,
+maintains actual consumed/available counts and updates original cache words.
+Event-one refill dispatch follows outer+0x40 and callback/context at +0x18/+0x1c,
+using a real compact 8-byte descriptor and checked guest/native callback kinds.
+The handler may synchronously feed data or arrange another thread to do so.
+The recovered 0x297C18 feed and 0x297CE8 end interfaces are native adapters;
+no PS2 DMA address mask is applied to Android pointers. A condition variable
+coordinates producers without holding the queue mutex across user callbacks.
+Unbound input, EOF before a complete field and allocation/range failures are
+explicit errors; no missing bits are fabricated as zero.
+
+Input state and 32-bit chunk links occupy the original private aligned DMA
+workspace (decoder+0x118f aligned down, within the constructor's 0x19a0 bytes)
+and `Port_LowAlloc` memory. Only OS locks/condition variables live in `.porthst`.
+Quiescent state/heap restoration therefore restores the exact cursor and queue,
+not an external sidecar cursor. The native initializer supports quiescent reset
+without overwriting the public decoder fields or callback records.
+
+SETIQ-equivalent matrix loads consume exactly 512 bits without byte alignment.
+Default intra matrices and wire-to-raster mapping reuse the existing
+`plat_mpeg2.c` tables through `port_mpeg_quant.h`; no duplicate movie decoder or
+emulator is added. MPEG control state preserves unrelated bits and normalizes
+reserved DC precision 3 to the hardware's readback value 1. Optional/composite
+fields, structure-cache preservation and display-offset branch counts follow
+the recovered instructions. The original CRI object is deliberately not cast
+to the incompatible `plat_movie.c` host decoder handle.
+
+### Executed validation
+
+- Six handlers, fragmented refill, pointer/integer/void callbacks, asynchronous
+  producer, truncation/EOF errors, all display-count branches and control bits.
+- Matrix combinations at a non-byte-aligned cursor, independent raster oracle,
+  preserved next-field guard, default matrices, both chroma diagnostics.
+- Quiescent snapshot/replay including the chunk allocator, plus allocation
+  canaries and cleanup. Tests contain only synthetic bitstreams/resources.
+- **14/14 host CTest cases**, including the actual LLVM guest/native diagnostic
+  bridge and preserved Mach-O ARM64 lowering; **8/8 SDK groups under ASan/UBSan**
+  (LeakSanitizer remains disabled by executor restriction); **81/81 desktop tests**.
+- Strict links: **130/130** runtime units after the six IPU functions; then
+  **132/132** after explicit Android bootstrap/import. Both use the whole
+  **274-unit** game archive and `--no-undefined`: **0 unresolved, 0 new SDK
+  symbols, 0 ABS32, 0 other LLD errors**. `libtenkaichi_mobile.so` was generated.
+- Experimental APK assembled using SDLActivity JNI and the real game/Vulkan
+  entry, signed and ZIP-aligned for 16 KiB pages. See [ANDROID_BOOT.md](ANDROID_BOOT.md).
+
+The native library/APK has not run on the Galaxy. The complete compatible data
+set, including DBZP.BIN and DBZ4.BIN, is absent from this workspace; the supplied
+main ELF alone cannot establish boot. No gameplay, full movie decoding,
+performance or touchscreen UI completion is claimed. User-data import and
+hardware diagnostics are the next validation boundary, not another unresolved
+SDK symbol. Commercial inputs/disassembly stay private and untracked.

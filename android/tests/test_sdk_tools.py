@@ -15,6 +15,25 @@ import strict_link
 
 
 class InventoryTests(unittest.TestCase):
+    def test_native_imports_preserve_pointer_slots_and_source_offsets(self):
+        import elf_data
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            shape = root / 'port/data'
+            shape.mkdir(parents=True)
+            (shape / 'index.txt').write_text('shape 1 0x25\nchecksum 0x1234\n')
+            source = shape / 'shape.s'
+            source.write_text('.section .data\n.p2align 4\n.globl A\nA:\n.space 4\n.zero 4\n.long A\n.space 3\n')
+            assembly, _, _ = elf_data.prepare(source,root)
+            self.assertIn('__bt4_data_',assembly.read_text())
+            table = elf_data.import_table(root,root).read_text()
+            self.assertIn('+ 0, 1, 37, 4',table)
+            self.assertIn('+ 12, 1, 49, 3',table)
+            self.assertIn('bt4_game_data_count = 2;',table)
+            source.write_text(source.read_text()+'.byte 1\n')
+            with self.assertRaises(ValueError):
+                elf_data.import_table(root,root)
+
     def test_real_baseline_preserves_duplicate_and_nonzero_slots(self):
         report = sdk_audit.inventory()
         self.assertEqual((report['baseline_count'], report['table_count'], report['slot_count']), (102, 15, 103))
