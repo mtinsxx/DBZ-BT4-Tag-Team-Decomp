@@ -15,6 +15,7 @@
 #include "port_addr.h"
 #ifdef __ANDROID__
 #include "../../android/include/bt4_address_window.h"
+#include "../../android/include/bt4_guest_memory.h"
 #endif
 #include <stdint.h>
 #include <stdio.h>
@@ -678,35 +679,23 @@ __attribute__((constructor)) static void Port_MapMemory(void) {
 #endif
 
 #ifdef __ANDROID__
-/* Called explicitly after the Activity configures private storage. dlopen must
-   neither read desktop paths nor reserve game memory. Roll back our mappings
-   on collision; never replace mappings owned by Android/other libraries. */
+/* Commit the early PROT_NONE reservations after validated user data is ready.
+   dlopen imports no game data. Only owned reservations can become writable;
+   mappings owned by Android/other libraries are never replaced. */
 int Port_AndroidMemoryPrepare(void) {
-    static const uint32_t ranges[][2] = {
-        {HEAP_BASE, HEAP_END-HEAP_BASE}, {STACK_BASE, STACK_SIZE},
-        {LOW_ARENA_BASE, LOW_ARENA_SIZE}, {0x10000000,0x10000},
-        {0x12000000,0x2000}, {0x70000000,0x4000}
-    };
-    void *mapped[6] = {0};
-    Bt4AddressWindow window;
-    size_t i;
-    long page = sysconf(_SC_PAGESIZE);
-    if (sLowArena != NULL) return 0;
-    if (page <= 0 || Bt4Android_WindowConfigure() != 0 ||
-        Bt4Addr_Init(&window, PORT_WINDOW) != BT4_ADDR_OK) return -1;
-    gPortStage = "Android: reserving guest memory";
-    for (i=0;i<6;++i) {
-        if (Bt4Addr_MapWritable(&window,ranges[i][0],ranges[i][1],&mapped[i]) != BT4_ADDR_OK) {
-            while (i) {
-                uintptr_t start=(uintptr_t)mapped[--i],aligned=start&~((uintptr_t)page-1);
-                size_t size=(start-aligned+ranges[i][1]+(size_t)page-1)&~((size_t)page-1);
-                munmap((void *)aligned,size);
-            }
-            gPortStage = "Android: guest mapping collision";
-            return -1;
-        }
+    _Static_assert(HEAP_BASE==BT4_GUEST_HEAP_BASE && HEAP_END==BT4_GUEST_HEAP_END,"heap layout unchanged");
+    _Static_assert(STACK_BASE==BT4_GUEST_STACK_BASE && STACK_SIZE==BT4_GUEST_STACK_SIZE,"stack layout unchanged");
+    _Static_assert(LOW_ARENA_BASE==BT4_GUEST_LOW_BASE && LOW_ARENA_SIZE==BT4_GUEST_LOW_SIZE,"arena layout unchanged");
+    if(sLowArena!=NULL)return 0;
+    gPortStage="Android: committing reserved guest memory";
+    if(Bt4Android_MemoryCommit()!=0) {
+        gPortStage="Android: guest memory initialization failed (see guestmem report)";return -1;
     }
-    sLowArena=mapped[2];sLowNext=sLowArena;
+    sLowArena=Bt4Android_MemoryHost(LOW_ARENA_BASE);
+    if(!sLowArena) {
+        fprintf(stderr,"guestmem phase=allocator-bind missing committed arena guest=0x%08x\n",LOW_ARENA_BASE);return -1;
+    }
+    sLowNext=sLowArena;
     gPortStage = "Android: guest memory ready; data not imported";
     return 0;
 }
@@ -751,22 +740,10 @@ static void low_region_take(void) {
         }
         sLowCommitted = sLowArena;
 #elif defined(__ANDROID__)
-        {
-            Bt4AddressWindow window;
-            void *region = NULL;
-            int result;
-            if (Bt4Android_WindowConfigure() != 0 ||
-                Bt4Addr_Init(&window, PORT_WINDOW) != BT4_ADDR_OK) {
-                fprintf(stderr, "bt4 android: no guest address window for low allocation\n");
-                exit(2);
-            }
-            result = Bt4Addr_MapWritable(&window, LOW_ARENA_BASE, LOW_ARENA_SIZE, &region);
-            if (result != BT4_ADDR_OK) {
-                fprintf(stderr, "bt4 android: cannot reserve guest arena at +0x%08X (error %d)\n",
-                        LOW_ARENA_BASE, result);
-                exit(2);
-            }
-            sLowArena = (uint8_t *)region;
+        /* The range is already owned by the early reservation. Never attempt
+           a second mmap over it, and never publish an uncommitted arena. */
+        if(Port_AndroidMemoryPrepare()!=0) {
+            fprintf(stderr,"guestmem: allocator requested before successful memory initialization\n");exit(2);
         }
 #elif defined(__APPLE__)
         sLowArena = map_at(LOW_ARENA_BASE, LOW_ARENA_SIZE); /* (pages are only taken as they are first used) */

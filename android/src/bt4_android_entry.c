@@ -129,9 +129,11 @@ __attribute__((visibility("default"))) int SDL_main(int argc,char **argv) {
     if (!elf || !overlay) SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,"Cannot read verified main/menu programs");
     else if (Port_AndroidMemoryPrepare()) SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,"Guest memory mapping failed");
     else {
+        SDL_Log("boot stage=guest memory ready; importing verified program tables");
         status=Bt4Android_ImportPrograms(elf,elf_size,overlay,overlay_size,
             bt4_game_data_runs,bt4_game_data_count,bt4_game_data_checksum,1);
         if (status) SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,"Game table import rejected: %d",status);
+        else SDL_Log("boot stage=program tables imported; guest stack entry next");
     }
     free(elf);free(overlay);
     if (status) return 2;

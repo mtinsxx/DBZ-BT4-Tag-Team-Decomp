@@ -21,7 +21,7 @@ on-device boot, graphics or gameplay has been established.
 - Compiled all 274 original game C translation units to ARM64 objects.
 - Strictly linked an explicitly labelled subset containing the original
   alignment and intrusive-list implementations (not the complete game).
-- Compiled all 134 runtime/vendor/Android translation units, including the
+- Compiled all 135 runtime/vendor/Android translation units, including the
   existing GS/VU1, SDL GPU/Vulkan, audio, menu and network sources.
 - Removed assembly-table ABS32 relocations with checked startup fixups;
   direct native/software-float boundaries have integer-bit adapters.
@@ -41,6 +41,11 @@ on-device boot, graphics or gameplay has been established.
   not complete. The six IPU parsers are not a complete new MPEG-2 video decoder.
 
 See [SDK_RECONSTRUCTION.md](SDK_RECONSTRUCTION.md) and [ANDROID_BOOT.md](ANDROID_BOOT.md).
+
+The Galaxy's next test passed ENG/SAF but failed the late guest mmap stage.
+Sparse guest ranges are now reserved PROT_NONE during window setup and committed
+RW only at explicit boot, with detailed failure/overlap diagnostics. The fixed
+compiler anchor and importer are unchanged. See [GUEST_MEMORY.md](GUEST_MEMORY.md).
 
 ## Address-window module
 

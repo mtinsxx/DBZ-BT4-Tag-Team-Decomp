@@ -36,12 +36,14 @@ base-program overrides, with observed/expected size and CRC in diagnostics.
 `SDL_main` receives the private files directory, sets content roots and the
 strict existing Vulkan backend, and logs the detected profile. Only supported
 program data reaches initialization. `dlopen` configures the guest window, ABI
-metadata and compact table relocations, but does not reserve guest memory or
-read the desktop `/proc/self/exe.dat`. Desktop keeps its existing constructor.
+metadata and compact table relocations, and reserves the sparse guest ranges as
+PROT_NONE before pointer constructors. Writable commit remains explicit. It does
+not read the desktop `/proc/self/exe.dat`. Desktop keeps its existing constructor.
 
-`Port_AndroidMemoryPrepare` reserves heap, guest stack, compact arena, registers
-and scratchpad through checked `MAP_FIXED_NOREPLACE`. Collisions roll back this
-attempt's mappings, rounded to the host page size, without replacing mappings.
+`Port_AndroidMemoryPrepare` commits the early reservations as read/write only
+once every range is owned. No allocator pointer is exposed on partial failure.
+See [GUEST_MEMORY.md](GUEST_MEMORY.md) for ownership, rollback and detailed mmap /
+mprotect diagnostics; the compiler's fixed ELF/guest anchor is unchanged.
 `elf_data.import_table` still derives 2,388 legal import spans from skeleton
 metadata; pointer slots and zeros stay intact. The validated main/overlay are
 read from the selected ISO into temporary RAM. `Bt4Android_ImportPrograms`
@@ -59,16 +61,18 @@ The Android process retains bionic/debuggerd's crash handler, rather than the
 desktop handler which reset signals to SIG_DFL. The wrapper exports native/Java
 logs, APK commits, device data and its own ApplicationExitInfo records/traces
 when Android supplies them (native tombstones on supported system versions).
-Missing traces are reported, not invented. No device trace has been supplied
-past the old profile gate; this revised boot path remains untested on hardware.
+Missing traces are reported, not invented. The latest device log confirms ENG
+validation and direct SAF reads, then reports guest memory mapping failure. It
+contains no syscall errno or VMA snapshot. The revised reservation/commit path
+and everything beyond it remain unverified on hardware.
 
-Validation: 15 host CTest cases, 10 SDK/profile/ISO sanitizer groups and 81
+Validation: 16 host CTest cases, 11 SDK/profile/ISO/memory sanitizer groups and 81
 desktop tests pass. Synthetic tests cover exact ENG/ESP catalogue entries,
 corruption, AFS boundaries/empty files, raw-source lifetime, nonzero offsets,
 pipes, truncation, cache/media integration and sparse reads beyond 6 GiB.
 The wrapper's Java test removes a 12 GiB sparse private import while preserving
 external ISO/saves/mods/settings and rejecting symlink escape. ARM64 full links
-have 274 game / 134 runtime units and zero SDK/ABS32 blockers. Only the owner
+have 274 game / 135 runtime units and zero SDK/ABS32 blockers. Only the owner
 can establish actual Galaxy boot, Vulkan presentation and gameplay; complete
 private game data/device access is unavailable here. Android state-list, modern
 touch UI and complete MPEG movie decoding remain separate pending work.
