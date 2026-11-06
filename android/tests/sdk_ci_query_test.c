@@ -21,6 +21,7 @@ static uint32_t override_data[64];
 static unsigned errors;
 static const char *expected_message;
 static char root[256], small_path[512];
+void Test_CiSetRoot(const char *path) { assert(strlen(path)<sizeof(root));strcpy(root,path); }
 
 /* Fixtures for unrelated content services used by the REAL plat_fcache.c.
    Its open/stat/cache/alias precedence code runs unchanged. */

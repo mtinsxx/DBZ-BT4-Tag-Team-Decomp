@@ -11,6 +11,24 @@
       "status": "reconstructed"
     },
     {
+      "symbol": "dvCiOpen",
+      "native_signature": "Bt4DvdCiWork *dvCiOpen(const char *name, uint32_t unused, uint32_t attributes)",
+      "source": "android/src/bt4_sdk_ci_io.c",
+      "status": "reconstructed"
+    },
+    {
+      "symbol": "dvCiReqRd",
+      "native_signature": "int32_t dvCiReqRd(Bt4DvdCiWork *file, int32_t sectors, void *destination)",
+      "source": "android/src/bt4_sdk_ci_io.c",
+      "status": "reconstructed"
+    },
+    {
+      "symbol": "func_0027BCD0",
+      "native_signature": "void func_0027BCD0(void)",
+      "source": "android/src/bt4_sdk_ci_io.c",
+      "status": "reconstructed"
+    },
+    {
       "symbol": "func_0027BD48",
       "native_signature": "void func_0027BD48(uint32_t callback, uint32_t context)",
       "source": "android/src/bt4_sdk_fields.c",
@@ -23,6 +41,12 @@
       "status": "reconstructed"
     },
     {
+      "symbol": "func_0027C0F0",
+      "native_signature": "void func_0027C0F0(Bt4DvdCiWork *file)",
+      "source": "android/src/bt4_sdk_ci_io.c",
+      "status": "reconstructed"
+    },
+    {
       "symbol": "func_0027C148",
       "native_signature": "int32_t func_0027C148(Bt4DvdCiWork *file, int32_t offset, int32_t origin)",
       "source": "android/src/bt4_sdk_file_fields.c",
@@ -32,6 +56,12 @@
       "symbol": "func_0027C1E0",
       "native_signature": "int32_t func_0027C1E0(const Bt4DvdCiWork *file)",
       "source": "android/src/bt4_sdk_file_fields.c",
+      "status": "reconstructed"
+    },
+    {
+      "symbol": "func_0027C3C0",
+      "native_signature": "void func_0027C3C0(Bt4DvdCiWork *file)",
+      "source": "android/src/bt4_sdk_ci_io.c",
       "status": "reconstructed"
     },
     {
@@ -293,6 +323,12 @@
       "status": "reconstructed"
     },
     {
+      "symbol": "func_0028B7C0",
+      "native_signature": "void func_0028B7C0(void)",
+      "source": "android/src/bt4_sdk_ci_io.c",
+      "status": "reconstructed"
+    },
+    {
       "symbol": "func_0028B838",
       "native_signature": "void func_0028B838(uint32_t callback, uint32_t context)",
       "source": "android/src/bt4_sdk_fields.c",
@@ -311,6 +347,12 @@
       "status": "reconstructed"
     },
     {
+      "symbol": "func_0028BD28",
+      "native_signature": "void func_0028BD28(Bt4HostCiWork *file)",
+      "source": "android/src/bt4_sdk_ci_io.c",
+      "status": "reconstructed"
+    },
+    {
       "symbol": "func_0028BDC8",
       "native_signature": "int32_t func_0028BDC8(Bt4HostCiWork *file, int32_t offset, int32_t origin)",
       "source": "android/src/bt4_sdk_file_fields.c",
@@ -320,6 +362,12 @@
       "symbol": "func_0028BE60",
       "native_signature": "int32_t func_0028BE60(const Bt4HostCiWork *file)",
       "source": "android/src/bt4_sdk_file_fields.c",
+      "status": "reconstructed"
+    },
+    {
+      "symbol": "func_0028C028",
+      "native_signature": "void func_0028C028(Bt4HostCiWork *file)",
+      "source": "android/src/bt4_sdk_ci_io.c",
       "status": "reconstructed"
     },
     {
@@ -500,6 +548,18 @@
       "symbol": "func_002BC748",
       "native_signature": "int32_t func_002BC748(void *destination, const void *source, uint32_t bytes)",
       "source": "android/src/bt4_sdk_memory.c",
+      "status": "reconstructed"
+    },
+    {
+      "symbol": "htCiOpen",
+      "native_signature": "Bt4HostCiWork *htCiOpen(const char *name, uint32_t unused, uint32_t attributes)",
+      "source": "android/src/bt4_sdk_ci_io.c",
+      "status": "reconstructed"
+    },
+    {
+      "symbol": "htCiReqRd",
+      "native_signature": "int32_t htCiReqRd(Bt4HostCiWork *file, int32_t sectors, void *destination)",
+      "source": "android/src/bt4_sdk_ci_io.c",
       "status": "reconstructed"
     },
     {

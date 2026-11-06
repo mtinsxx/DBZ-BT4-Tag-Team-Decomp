@@ -72,7 +72,7 @@ if(NOT ANDROID)
     add_test(NAME sdk_sjmem_contracts COMMAND bt4_sdk_sjmem_tests)
     add_executable(bt4_sdk_mf_tests tests/sdk_mf_test.c src/bt4_sdk_mf.c src/bt4_sdk_cri_common.c src/bt4_sdk_fields.c
         tests/sdk_file_fields_test.c src/bt4_sdk_file_fields.c tests/sdk_ci_query_test.c src/bt4_sdk_ci_query.c
-        src/bt4_iso9660.c ../port/src/plat_fcache.c)
+        src/bt4_iso9660.c ../port/src/plat_fcache.c tests/sdk_ci_io_test.c src/bt4_sdk_ci_io.c)
     target_include_directories(bt4_sdk_mf_tests PRIVATE include ../port/src)
     target_compile_features(bt4_sdk_mf_tests PRIVATE c_std_11)
     target_link_libraries(bt4_sdk_mf_tests PRIVATE bt4_android_guest_abi Threads::Threads)

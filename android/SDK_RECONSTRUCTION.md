@@ -15,8 +15,8 @@ methods reference the original skeleton resource symbols; tests supply their
 own synthetic resources.
 
 The original **102-symbol baseline is immutable**. The first reconstructed
-sets resolve **86 baseline entries: 85 actual functions and one wrongly
-classified scalar**, leaving **16 undefined symbols**. No table was removed,
+sets resolve **96 baseline entries: 95 actual functions and one wrongly
+classified scalar**, leaving **6 undefined symbols**. No table was removed,
 no weak/stub symbol was introduced and no callback reference was nulled to
 make the linker pass. The complete library still fails `--no-undefined`.
 
@@ -252,6 +252,7 @@ handlers and the actual stdout route. This does not validate video decoding.
 | DVD/host field methods | 125/125 | 26 | 76 | 0 |
 | IPU diagnostic leaves | 126/126 | 22 | 80 | 0 |
 | DVD/host metadata and commands | 127/127 | 16 | 86 | 0 |
+| DVD/host native I/O | 128/128 | 6 | 96 | 0 |
 
 Each attempt uses the whole 274-unit game archive and `--no-undefined`.
 Logs/reports stay in local build output and are reproduced by the full Actions
@@ -267,17 +268,11 @@ LLVM's optional sanitizer runtime is absent in this workspace. Leak scanning
 is disabled because the managed executor cannot run its ptrace scan; these
 tests do not establish leak freedom or device gameplay.
 
-## Remaining 16 symbols and next work
+## Remaining six symbols and next work
 
-- **Ten I/O methods**: five DVD (`dvCi`) and five host-file (`htCi`). Each
-  group still needs server/update, open/read and close/stop. Recovered query
-  methods below provide metadata, not request submission or completion. The
-  DVD request allocator/read/abort/completion helpers are at `0x279D98`,
-  `0x279EC0`, `0x27A368`, `0x27A238`, `0x279E20`; host descriptors and
-  override providers still require a verified native handle translation.
-  A directory override's descriptor is not evidence that it can be passed
-  directly to POSIX read/close. Do not fabricate progress or silently ignore
-  override handles.
+DVD/host dispatch targets are now implemented. The remaining six symbols
+belong to the MPEG-2 extension dispatch table, described below.
+
 - **Six IPU/MPEG parser/decoder entries**: `0x2A09D8`, `0x2A0B18`,
   `0x2A0C20`, `0x2A11E8`, `0x2A1278`, `0x2A1310`. They transitively
   consume bits through `0x29ECB8`/`0x29EEC8`, including IPU command/control
@@ -304,14 +299,14 @@ from a clean Debian 13 environment by Actions run
 [42158816651](https://github.com/mtinsxx/BT4-Native-Android/actions/runs/42158816651):
 9/9 host tests, 3/3 sanitizer contract groups and desktop regressions passed;
 122/122 runtime units compiled and the strict link failed with exactly the
-expected 63 symbols, zero ABS32 and no other linker errors. The newer 86-entry
+expected 63 symbols, zero ABS32 and no other linker errors. The newer 96-entry
 checkpoint has separate local logs and must be checked in its own fresh CI run.
 
 Local final host checks: 12/12 CTest with LLVM enabled; 10/10 SDK Python tool
 tests; 6/6 SDK contract groups under ASan/UBSan; 81/81 desktop regressions.
 The original Mach-O lowering test still emits its ARM64 object. The pixel
 oracle and synthetic callbacks are unit evidence, not commercial-data execution
-or an on-device test. The native Android runtime has 127 source units now.
+or an on-device test. The native Android runtime has 128 source units now.
 
 ## LLVM callback regression discovered after the 80-entry checkpoint
 
@@ -372,3 +367,120 @@ links their existing implementations. The query group passes warnings-as-errors
 and ASan/UBSan. After the group, the one final complete ARM64 build compiled
 274/274 game and 127/127 runtime units; strict link failed with exactly 16
 original symbols, no new undefined symbols, zero ABS32 and no other errors.
+
+## Ten DVD/host I/O operations
+
+`bt4_sdk_ci_io.c` implements both servers, Open/Read/Stop/Close for the DVD
+and host drivers. It reuses the previously verified metadata/path helpers,
+`Bt4Iso_Find`, `Port_FileSize` and `Port_FileReadAt`. Original pool allocation
+selects the last free slot: 40 DVD records of 0x48 bytes, 13 host records of
+0x30 bytes. These are distinct from the 40 first-free memory-file records.
+
+The original request allocator at `0x279D98` has **one shared 0x38-byte
+request**, `D_002D3320`, used by both drivers. Allocation/release update
+`D_002D3380`/`D_002D3384`. Recovered request fields retain their offsets:
+used/type/state/reserved byte at 0..3 (initial reserved byte 255), abort-request
+word +4, DVD sector/count/destination/mode at +8/+0xc/+0x10/+0x14, host
+destination +0x18, signed 64-bit byte count/sector position +0x20/+0x28,
+descriptor +0x30. In particular, +4 is an abort flag, not an invented errno slot.
+Jump tables at `0x2F5E80` and `0x2F8400` map request state 0 to stopped, 3 to
+successful completion and 9 to work status 3/error; other states stay pending.
+The optional service-guard callback and per-driver recursion guards are retained.
+
+The native backend schedules real reads cooperatively: an asynchronous ReqRd
+reserves the one slot, the appropriate Server performs the actual read and
+only then commits completion/counters; Stop can cancel an unexecuted request.
+Synchronous mode performs that read before returning. It uses a recursive native
+critical section, so Stop waits if a Server is currently performing I/O. There
+is no background IOP thread, fabricated descriptor or success without bytes.
+DVD reads preserve actual ISO sector padding. Host reads retain a zero-filled
+last sector and use the real remaining extent, fixing the original count that
+could exceed the file/destination span. Request sizes are checked against the
+compact destination range. Native read failure produces status 3 and a zero
+synchronous result, rather than reproducing the EE synchronous path's ignored
+error result. `Bt4Ci_LastIoError()` exposes zero/negative errno separately in
+`.porthst`; it does not repurpose original game fields. ISO modes other than
+2048-byte sectors fail with ENOTSUP rather than inventing raw-CD bytes.
+
+DVD synchronous completion preserves its observed requested-count/clamped-count
+difference. Seek/Stop/status and command behavior remain consistent with the
+previously implemented field methods. Empty host files retain the original
+Open rejection even though existence/size queries can succeed.
+
+### Host descriptors, restore and content ownership
+
+Normal host opens obtain a stable positive logical id for an immutable relative
+path in the existing native file cache. The mapping and actual OS resources
+live outside saved game memory. A hash collision or conflicting mapping fails
+Open, never aliases another file. Repeated opens and restored work records
+continue to address the same real path; the cache owns FILE lifetimes/eviction.
+This follows its existing immutable-content/per-content-mount assumptions.
+
+An original override id cannot safely be treated as a Linux fd. Native setup
+can associate it with a real provider path through
+`Bt4Ci_BindHostDescriptor(id, relative_path)`. That call verifies backing data
+and refuses to change an existing id's path. Unbound override ids cause an
+explicit Open error. A future initializer producing override tables must make
+these associations; there is no automatic translation of arbitrary saved PS2
+OS descriptors. Close does not invalidate borrowed mappings or immutable path
+ids, which would break restore/replay. This is an explicit native provider
+boundary, not a claim that the Android content initializer already exists.
+
+### Verification
+
+The targeted I/O suite runs actual ISO and cached-file reads, not mocked bytes.
+It verifies different DVD/host padding, deferred and synchronous completion,
+cross-driver one-slot exclusion, service guards, cancellation/Close, pool
+exhaustion, override binding/restore/conflicts, EOF and real read errors. A
+sparse file is read past 6 GB to validate sector-to-byte conversion and native
+64-bit offsets. A declared extent larger than its real backing produces EIO;
+a missing ISO produces ENOENT and unsupported sector format produces ENOTSUP.
+Guard bytes remain intact. Warnings-as-errors and ASan/UBSan pass. The metadata
+inventory regression also passes with 95 recovered functions.
+
+The final local build compiles **274/274 game and 128/128 runtime units**;
+`--no-undefined` fails with exactly the six IPU extension targets, zero new
+undefined symbols, zero ABS32 and no other linker errors. Full library,
+initialization/JNI/Activity/Vulkan presentation and an installable APK are
+therefore still not produced. Desktop sources are unchanged; earlier desktop
+and LLVM regression results remain separate evidence, not newly rerun tests.
+
+## Refined IPU input/refill evidence
+
+`D_002FAA08` is indexed by the MPEG-2 extension id, not an arbitrary method
+number. Its remaining entries correspond to the standard extension payloads:
+
+| Extension id | Original target | Payload |
+| --- | --- | --- |
+| 1 | 0x2A09D8 | sequence extension |
+| 2 | 0x2A11E8 | sequence display extension |
+| 3 | 0x2A0B18 | quantization-matrix extension |
+| 4 | 0x2A1278 | copyright extension |
+| 7 | 0x2A1310 | picture display extension |
+| 8 | 0x2A0C20 | picture coding extension |
+
+The event-one callback path is `0x29EB38`/`0x29E9D0` -> `0x297EC8`.
+The outer handle is decoder+0x868; outer+0x40 points to decoder/callback records.
+Event one uses callback/context/gp at +0x18/+0x1c/+0x20 and a descriptor whose
+first word is one. It asks for data when fewer than 32 bits are available and
+input DMA QWC is zero. The native bit reader must actually advance/refill and
+observe decoder+0x878, not return a stale +0x848 cache word.
+
+`0x297C18(outer, data, length)` builds input DMA tags through `0x2971F0` at
+an aligned area derived from decoder+0x118f, then starts the input channel.
+The original rounds the transfer span and masks addresses to the PS2 physical
+range. `0x299558` reloads large transfers from the DMA interrupt. Separately,
+`0x297CE8(outer)` sets decoder+0x878. Output setup at `0x297C58` updates
++0xc4/+0xec/+0xf0/+0xf4/+0xf8; it must not be mistaken for the input feed.
+
+The quantization extension issues IPU commands 0x50000000/0x58000000; waiting
+for them also consumes matrix payload. Skipping the commands without consuming
+those bytes corrupts the next header position. A native implementation still
+needs a verified input queue, byte/bit cursor, refill/EOF/callback bridge,
+matrix loading and control-state mapping. The existing `plat_mpeg2.c` reader
+and I-frame decoder can supply reusable logic, but its object and callback
+protocol differ, and `plat_movie.c` does not construct the original CRI callback
+records. No guessed bridge or zero-returning bit reader has been added.
+The supplied main ELF contains the instructions needed to continue. Remaining
+work is native implementation and validation of this bridge, not another file
+upload. No video/gameplay execution has been validated.

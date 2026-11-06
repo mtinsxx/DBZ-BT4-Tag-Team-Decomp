@@ -83,20 +83,23 @@ static int host_path(const char *name, char *out, size_t capacity) {
     for (i=0;out[i];++i) if (out[i]=='\\') out[i]='/';
     return 1;
 }
-static int dvd_info(const char *name, uint32_t result[2]) {
+int Bt4Ci_DvdLocate(const char *name, Bt4IsoFile *file, int *overridden) {
+    uint32_t result[2];
     char path[1024], *relative;
     const char *iso_path;
     FILE *iso;
     Bt4IsoFile info;
     int found;
-    if (!strcmp(name,D_002F6160)) { result[0]=0; result[1]=UINT32_MAX; return 1; }
+    if (overridden) *overridden=1;
+    if (!strcmp(name,D_002F6160)) { file->sector=0; file->size=UINT32_MAX; return 1; }
     if (strlen(name)==17 && name[8]=='.') {
         char *end;
         result[0]=(uint32_t)strtoull(name,&end,16);
         if (*end) ++end;
         result[1]=(uint32_t)strtoull(end,NULL,16)<<11;
     } else override(D_002D4CD0,name,1,result);
-    if (result[1]) return 1;
+    if (result[1]) { file->sector=result[0]; file->size=result[1]; return 1; }
+    if (overridden) *overridden=0;
     if (!dvd_path(name,path,sizeof(path))) return 0;
     relative=strchr(path,':'); relative=relative ? relative+1 : path;
     iso_path=getenv("BT4_ISO");
@@ -104,10 +107,22 @@ static int dvd_info(const char *name, uint32_t result[2]) {
     found=Bt4Iso_Find(iso,relative,&info);
     fclose(iso);
     if (found!=1) return 0;
-    result[0]=info.sector; result[1]=info.size;
+    *file=info;
     return 1;
 }
-static int64_t host_size(const char *name, int report) {
+int Bt4Ci_HostOverride(const char *name, uint32_t pair[2]) {
+    override(D_002D4E78,name,0,pair);
+    return pair[1]!=0;
+}
+int Bt4Ci_HostRelativePath(const char *name, char *out, size_t capacity) {
+    char *relative;
+    if (!host_path(name,out,capacity)) return 0;
+    relative=strchr(out,':'); relative=relative ? relative+1 : out;
+    while (*relative=='/') ++relative;
+    memmove(out,relative,strlen(relative)+1);
+    return 1;
+}
+int64_t Bt4Ci_HostSize(const char *name, int report) {
     uint32_t result[2];
     char path[1024], *relative;
     long size;
@@ -124,12 +139,12 @@ static int64_t host_size(const char *name, int report) {
     return size;
 }
 int32_t dvCiGetFileSize(const char *name) {
-    uint32_t info[2];
+    Bt4IsoFile info;
     if (!name) { error(1,D_002F5EA8); return 0; }
-    if (!dvd_info(name,info)) { error(1,D_002F5F00); return 0; }
-    return (int32_t)info[1];
+    if (!Bt4Ci_DvdLocate(name,&info,NULL)) { error(1,D_002F5F00); return 0; }
+    return (int32_t)info.size;
 }
-int32_t func_0027BDD8(const char *name) { uint32_t info[2]; return name ? dvd_info(name,info) : 0; }
+int32_t func_0027BDD8(const char *name) { Bt4IsoFile info; return name ? Bt4Ci_DvdLocate(name,&info,NULL) : 0; }
 int32_t func_0028B850(const char *name) {
     uint32_t result[2];
     char path[1024], *relative;
@@ -141,17 +156,17 @@ int32_t func_0028B850(const char *name) {
     while (*relative=='/') ++relative;
     return Port_FileSize(relative)>=0;
 }
-int32_t func_0028B8F0(const char *name) { return (int32_t)(uint32_t)host_size(name,1); }
+int32_t func_0028B8F0(const char *name) { return (int32_t)(uint32_t)Bt4Ci_HostSize(name,1); }
 int32_t func_0027C680(const void *target, int32_t command) {
     const Bt4DvdCiWork *file=target;
-    uint32_t info[2];
+    Bt4IsoFile info;
     uint64_t bytes;
     if (!target) return 0;
     switch (command) {
     case 200: bytes=(uint64_t)(int64_t)file->completed_sectors<<11; return (int32_t)(uint32_t)(bytes>>32);
     case 201: return (int32_t)((uint32_t)file->completed_sectors<<11);
     case 202: case 204: case 301: return 0; /* complete original constant leaves */
-    case 203: case 205: return dvd_info(target,info) ? (int32_t)info[1] : 0;
+    case 203: case 205: return Bt4Ci_DvdLocate(target,&info,NULL) ? (int32_t)info.size : 0;
     case 302: return (int32_t)file->reserved4;
     case 299: return 1;
     default: return 0;
@@ -167,8 +182,8 @@ int32_t func_0028C288(const void *target, int32_t command) {
         size=(uint64_t)file->file_size;
         if (size<bytes) bytes=size;
         return command==200 ? (int32_t)(uint32_t)(bytes>>32) : (int32_t)(uint32_t)bytes;
-    case 202: case 204: size=(uint64_t)host_size(target,1); return (int32_t)(uint32_t)(size>>32);
-    case 203: case 205: return (int32_t)(uint32_t)host_size(target,1);
+    case 202: case 204: size=(uint64_t)Bt4Ci_HostSize(target,1); return (int32_t)(uint32_t)(size>>32);
+    case 203: case 205: return (int32_t)(uint32_t)Bt4Ci_HostSize(target,1);
     case 301: return (int32_t)(uint32_t)((uint64_t)file->file_size>>32);
     case 302: return (int32_t)(uint32_t)file->file_size;
     case 299: return 1;
