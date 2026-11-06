@@ -88,3 +88,40 @@ int guest_sdk_contracts(void) {
     return D_002D3FE4 == (u32)accept_pointer && D_002D3FE8 == (u32)&value &&
         ((__typeof__(*size_query) *)(size_query))(sdk_record) == 2048;
 }
+
+/* Native SDK -> transformed game callbacks must preserve compact descriptors
+   as well as each callback's actual pointer/integer declaration. */
+static u32 sdk_decoder[0x870/4], sdk_outer[0x44/4], sdk_error_table[0x18/4];
+static u32 sdk_expected_text;
+static int sdk_callback_count;
+extern const char D_002FA950[], D_002FA980[], D_002FA998[], D_002FA9D0[];
+extern int func_002A0C00(const void *), func_002A0C10(const void *);
+extern int func_002A0E08(const void *), func_002A0E18(const void *);
+static int sdk_pointer_callback(void *outer, const u32 *event, u32 context) {
+    if (outer != sdk_outer || event[0] != 0 || event[1] != sdk_expected_text || context != 0xF1234567u) return -1;
+    ++sdk_callback_count;
+    return (int)0x8ABCDEF0u;
+}
+static int sdk_integer_callback(u32 outer, u32 event_word, int *context) {
+    const u32 *event = (const u32 *)event_word;
+    if (outer != (u32)sdk_outer || event[0] != 0 || event[1] != sdk_expected_text || context != &value) return -1;
+    ++sdk_callback_count;
+    return (int)0x8ABCDEF0u;
+}
+int guest_sdk_ipu_callbacks(void) {
+    int i,j;
+    int (* __ptr32 __uptr methods[4])(const void *) = {func_002A0C00,func_002A0C10,func_002A0E08,func_002A0E18};
+    const char * __ptr32 __uptr messages[4] = {D_002FA950,D_002FA980,D_002FA998,D_002FA9D0};
+    sdk_decoder[0x868/4] = (u32)sdk_outer;
+    sdk_decoder[0x0C/4] = 1;
+    sdk_outer[0x40/4] = (u32)sdk_error_table;
+    for (i=0;i<2;++i) {
+        sdk_error_table[0x0C/4] = i ? (u32)sdk_integer_callback : (u32)sdk_pointer_callback;
+        sdk_error_table[0x10/4] = i ? (u32)&value : 0xF1234567u;
+        for (j=0;j<4;++j) {
+            sdk_expected_text = (u32)messages[j];
+            if (((__typeof__(*methods[j]) *)(methods[j]))(sdk_decoder) != (int)0x8ABCDEF0u) return 0;
+        }
+    }
+    return sdk_callback_count == 8;
+}

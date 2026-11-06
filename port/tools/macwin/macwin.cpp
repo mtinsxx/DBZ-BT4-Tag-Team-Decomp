@@ -47,6 +47,7 @@
 #include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Transforms/Utils/ModuleUtils.h"
+#include "llvm/Transforms/Utils/BasicBlockUtils.h"
 #include <map>
 #include <set>
 #include <vector>
@@ -258,6 +259,33 @@ struct Window {
             work.push_back(&I);
         }
         for (Instruction *I : work) {
+            if (Elf) {
+                if (auto *PN = dyn_cast<PHINode>(I)) {
+                    // A PHI operand is evaluated on its incoming edge, not
+                    // before the PHI. lowerConstant can emit checked encoding
+                    // calls: putting them in the merge block breaks PHI order
+                    // and dominance, and hoisting to a shared predecessor
+                    // would execute checks on a branch which never uses them.
+                    unsigned n = 0;
+                    while (n < PN->getNumIncomingValues()) {
+                        auto *C = dyn_cast<Constant>(PN->getIncomingValue(n));
+                        if (C && needsRuntime(C)) {
+                            BasicBlock *Pred = PN->getIncomingBlock(n);
+                            if (Pred->getTerminator()->getNumSuccessors() > 1) {
+                                if (!SplitEdge(Pred, PN->getParent()))
+                                    report_fatal_error("bt3-elf: cannot split constant PHI edge");
+                                // Splitting may merge duplicate switch edges
+                                // and update incoming indices in every PHI.
+                                n = 0;
+                                continue;
+                            }
+                            IRBuilder<> CB(Pred->getTerminator());
+                            PN->setIncomingValue(n, lowerConstant(C, CB));
+                        }
+                        ++n;
+                    }
+                }
+            }
             for (Use &U : I->operands()) {
                 if (auto *C = dyn_cast<Constant>(U.get())) {
                     if (!isa<BasicBlock>(U.get())) {

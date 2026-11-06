@@ -24,7 +24,25 @@ extern float guest_fp_indirect(float), native_scale(float);
 extern int guest_fp_variadic(void);
 extern int guest_fp_format(void), guest_rejected_varcallback(void);
 extern int guest_sdk_contracts(void);
+extern int guest_sdk_ipu_callbacks(void);
 uint32_t D_002D3FE4, D_002D3FE8, D_002D97F4, D_002D97F8, D_002E6F5C, D_002E6F60;
+/* Synthetic imported resources and a guest-addressable heap fixture for the
+   actual IPU diagnostic adapter. The native host stack may be out of range. */
+const char D_002FA6D0[] = "test: %s\n";
+const char D_002FA950[] = "A", D_002FA980[] = "B", D_002FA998[] = "C", D_002FA9D0[] = "D";
+static uint32_t sdk_event[2];
+static int sdk_event_used;
+uint32_t phi_value;
+extern uint32_t guest_phi_edge(int), guest_phi_switch(int), guest_phi_checked_edge(int);
+void *Port_LowAlloc(size_t size) {
+    assert(size == sizeof(sdk_event) && !sdk_event_used);
+    sdk_event_used = 1;
+    return sdk_event;
+}
+void Port_LowFree(void *pointer) {
+    assert(pointer == sdk_event && sdk_event_used);
+    sdk_event_used = 0;
+}
 static int foreign_callback(int *p) { return *p + 1; }
 extern void guest_write(int), guest_copy(void);
 typedef struct { uint32_t prev, next; } GameNode;
@@ -55,6 +73,12 @@ int main(void) {
     assert(guest_indirect());
     assert(guest_direct());
     assert(guest_sdk_contracts());
+    assert(guest_sdk_ipu_callbacks() && !sdk_event_used);
+    assert(guest_phi_edge(0) == 0 && guest_phi_edge(1) == Bt4Android_EncodePointer(&phi_value));
+    assert(guest_phi_switch(0) == 0 && guest_phi_switch(3) == 0);
+    assert(guest_phi_switch(1) == Bt4Android_EncodePointer(&phi_value));
+    assert(guest_phi_switch(2) == Bt4Android_EncodePointer(&phi_value));
+    assert(guest_phi_checked_edge(0) == 0);
     assert(guest_foreign(foreign_callback, &outside_window) == 12);
     assert(guest_fp_native(3.5f) == 7.0f && guest_fp_variadic() == 4);
     assert(guest_fp_format() == 4);
@@ -67,6 +91,19 @@ int main(void) {
             const struct rlimit limit = {0, 0};
             setrlimit(RLIMIT_CORE, &limit);
             guest_rejected_varcallback();
+            _exit(99);
+        }
+        assert(waitpid(child, &status, 0) == child);
+        assert(WIFSIGNALED(status) && WTERMSIG(status) == SIGABRT);
+    }
+    {
+        pid_t child = fork();
+        int status;
+        assert(child >= 0);
+        if (child == 0) {
+            const struct rlimit limit = {0, 0};
+            setrlimit(RLIMIT_CORE, &limit);
+            guest_phi_checked_edge(1);
             _exit(99);
         }
         assert(waitpid(child, &status, 0) == child);

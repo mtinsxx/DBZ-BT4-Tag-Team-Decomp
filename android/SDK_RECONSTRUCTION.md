@@ -312,3 +312,25 @@ tests; 6/6 SDK contract groups under ASan/UBSan; 81/81 desktop regressions.
 The original Mach-O lowering test still emits its ARM64 object. The pixel
 oracle and synthetic callbacks are unit evidence, not commercial-data execution
 or an on-device test. The native Android runtime has 126 source units now.
+
+## LLVM callback regression discovered after the 80-entry checkpoint
+
+The actual IPU diagnostic source is now included in the LLVM execution test,
+not only compiled as an ARM64 runtime object. A transformed guest callback
+reads its compact two-word event descriptor and exercises pointer/integer
+arguments through all four diagnostic entries at three loader-selected bases.
+Both host execution and Android ARM64 object emission are checked.
+
+The new guest test exposed invalid IR when conditional pointer-to-integer
+constant expressions were PHI inputs: the ELF pass inserted checked conversion
+instructions immediately before the PHI in its merge block. LLVM rejected
+that ordering. The correction materializes each incoming value before the
+predecessor terminator and splits a shared incoming edge first. Checks must
+execute only on the selected edge. Incoming indices are re-read after splitting,
+including duplicate switch edges. The original Mach-O constant path is unchanged.
+
+`llvm_phi.ll` covers a critical branch edge, duplicate switch predecessors and
+a checked foreign libc pointer: skipping its edge returns normally, selecting
+it triggers the existing range guard. The end-to-end callback case and the
+explicit IR regressions pass; the Mach-O ARM64 object is still emitted. This
+fix does not resolve more SDK symbols or establish decoder/gameplay behavior.
