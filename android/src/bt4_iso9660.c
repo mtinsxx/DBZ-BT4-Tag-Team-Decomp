@@ -53,6 +53,26 @@ static int match(const uint8_t *name, unsigned size, const char *want) {
     return want[i] == '\0' && (i == size || name[i] == ';');
 }
 
+int Bt4Iso_MatchesData(FILE *iso,const char *path,const void *data,size_t size) {
+    Bt4IsoFile file;
+    unsigned char buffer[32768];
+    const unsigned char *expected=data;
+    size_t offset=0;
+    int found;
+    if (!iso || (!data && size)) return -1;
+    found=Bt4Iso_Find(iso,path,&file);
+    if (found!=1) return found;
+    if (file.size!=size) return 0;
+    if (fseeko(iso,(off_t)((uint64_t)file.sector*SECTOR),SEEK_SET)) return -1;
+    while (offset<size) {
+        size_t n=size-offset<sizeof(buffer)?size-offset:sizeof(buffer);
+        if (fread(buffer,1,n,iso)!=n) return -1;
+        if (memcmp(buffer,expected+offset,n)) return 0;
+        offset+=n;
+    }
+    return 1;
+}
+
 int Bt4Iso_Find(FILE *iso, const char *path, Bt4IsoFile *file) {
     uint8_t sector[SECTOR];
     char normalized[256];

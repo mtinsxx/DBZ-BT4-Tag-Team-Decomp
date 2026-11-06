@@ -15,6 +15,14 @@ presented. Failed setup attempts do not latch the started flag or the identity
 cache; a corrected import can be retried before the game starts. The main ELF
 supplied during reconstruction alone is insufficient.
 
+Native DVD methods need the original sector layout and padding. Setup also
+imports the owner's ISO as private `disc.iso`, bound through `BT4_ISO`. Before
+any memory/data initialization, the three ISO program extents are compared
+byte-for-byte with the independently profile-verified extracted programs.
+A missing, malformed or mismatched ISO stops startup. Synthetic ISO tests
+exercise equality, differences, size/missing-file rejection, invalid extents
+and real sparse-file comparisons beyond 6 GiB. No sectors or LSNs are invented.
+
 `Port_AndroidMemoryPrepare` reserves heap, guest stack, compact allocator arena,
 registers and scratchpad with checked `MAP_FIXED_NOREPLACE` mappings. A failed
 reservation rolls back this attempt's earlier mappings, rounded to the host

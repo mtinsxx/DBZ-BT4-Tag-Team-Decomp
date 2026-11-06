@@ -557,3 +557,14 @@ main ELF alone cannot establish boot. No gameplay, full movie decoding,
 performance or touchscreen UI completion is claimed. User-data import and
 hardware diagnostics are the next validation boundary, not another unresolved
 SDK symbol. Commercial inputs/disassembly stay private and untracked.
+
+
+### Android DVD source integration
+
+The initial Activity imported extracted files, but DVD contracts also require
+`BT4_ISO` for real sector metadata and padding. The app now imports the original
+ISO privately and binds it before native game entry. Startup compares all three
+ISO program files against the already size/CRC-verified extracted profile.
+Tests use synthetic ISO records/payloads and a sparse file beyond 6 GiB; match,
+byte/size mismatch, absent entries and malformed metadata are covered. No fake
+LSNs, reconstructed sector padding or silent folder fallback is introduced.

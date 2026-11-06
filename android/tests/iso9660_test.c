@@ -49,11 +49,21 @@ int main(void) {
     assert(Bt4Iso_Find(iso, "/MISSING.BIN", &file) == 0);
     assert(Bt4Iso_Find(iso, "/../SLUS_219.78", &file) == 0);
     assert(Bt4Iso_Find(iso, "/BIN", &file) == 0);
+    assert(Bt4Iso_MatchesData(iso,"SLUS_219.78",zeros,8)==1);
+    assert(Bt4Iso_MatchesData(iso,"SLUS_219.78",zeros,9)==0);
+    zeros[0]=1;assert(Bt4Iso_MatchesData(iso,"SLUS_219.78",zeros,8)==0);zeros[0]=0;
+    assert(Bt4Iso_MatchesData(iso,"MISSING.BIN",zeros,8)==0);
+    /* Compare real sparse-file data beyond 6 GiB without truncating LBA math. */
+    sector_write(iso,3u*1024*1024,zeros);
+    entry(root,3u*1024*1024,8,0,"SLUS_219.78;1",13);sector_write(iso,20,root);
+    assert(Bt4Iso_MatchesData(iso,"SLUS_219.78",zeros,8)==1);
+    entry(root,22,8,0,"SLUS_219.78;1",13);sector_write(iso,20,root);
     assert(setenv("BT4_ISO", path, 1) == 0);
     assert(sceCdSearchFile(&file, "\\SLUS_219.78;1") == 1 && file.sector == 22);
     /* Reject mismatched endian copies and extents outside the input. */
     pvd[156+6] = 0xff; sector_write(iso, 16, pvd);
     assert(Bt4Iso_Find(iso, "SLUS_219.78", &file) == -1);
+    assert(Bt4Iso_MatchesData(iso,"SLUS_219.78",zeros,8)==-1);
     entry(pvd+156, 20, 2048, 1, "", 1); sector_write(iso, 16, pvd);
     entry(root, UINT32_MAX, 8, 0, "SLUS_219.78;1", 13); sector_write(iso, 20, root);
     assert(Bt4Iso_Find(iso, "SLUS_219.78", &file) == -1);

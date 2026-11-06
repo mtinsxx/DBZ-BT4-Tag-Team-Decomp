@@ -1,5 +1,6 @@
 #ifdef __ANDROID__
 #include "bt4_android_boot.h"
+#include "bt4_iso9660.h"
 #include "port_host.h"
 #include <SDL3/SDL.h>
 #include <errno.h>
@@ -43,6 +44,19 @@ static void *read_program(const char *root,const char *name,size_t *size) {
     fclose(file);*size=(size_t)length;return bytes;
 }
 
+static int verify_iso(const char *root) {
+    static const char *names[]={"SLUS_219.78","BIN/DBZP.BIN","BIN/DBZ4.BIN"};
+    FILE *iso=fopen("disc.iso","rb");unsigned i;
+    if (!iso) return 0;
+    for (i=0;i<3;++i) {
+        size_t size=0;void *program=read_program(root,names[i],&size);
+        int same=program && Bt4Iso_MatchesData(iso,names[i],program,size)==1;
+        free(program);
+        if (!same) { fclose(iso);return 0; }
+    }
+    fclose(iso);return 1;
+}
+
 /* SDLActivity supplies its private files directory. SDL owns Surface, audio,
    input and lifecycle JNI; the existing GS/VU1 renderer supplies Vulkan frames.
    No commercial data is bundled and no substitute scene is drawn on failure. */
@@ -53,7 +67,7 @@ __attribute__((visibility("default"))) int SDL_main(int argc,char **argv) {
     if (chdir(argv[1])) return 2;
     (void)freopen("tenkaichi-native.log","w",stderr);
     SDL_SetLogOutputFunction(log_output,NULL);
-    if (setenv("BT3_DATA","gamedata",1) ||
+    if (setenv("BT3_DATA","gamedata",1) || setenv("BT4_ISO","disc.iso",1) ||
         setenv("BT4_CONTENT_ROOT",argv[1],1) || setenv("BT3_GPU_API","vulkan",1)) {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,"Cannot configure private storage: %s",strerror(errno));
         return 2;
@@ -63,6 +77,10 @@ __attribute__((visibility("default"))) int SDL_main(int argc,char **argv) {
     const char *root=getenv("BT3_DATA");
     if (!root || Port_BuildIdentity(NULL)!=1) {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,"Engine not started: %s",Port_BuildIdentitySummary());
+        return 2;
+    }
+    if (!verify_iso(root)) {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,"ISO missing, unreadable, or different from the verified extracted programs");
         return 2;
     }
     elf=read_program(root,"SLUS_219.78",&elf_size);
