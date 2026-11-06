@@ -366,6 +366,9 @@ static void late_wait(void) {
     }
 }
 void Port_VBlank(void) {
+#ifdef __ANDROID__
+    if(gPortVBlanks<4)fprintf(stderr,"boot execution vblank=%u (real game wait)\n",gPortVBlanks+1);
+#endif
     Port_LagMark('W'); /* (the game has come to wait for a blank) */
     {
         extern void Port_SessionPoll(void); /* gs/state.c: the state at the first blank is kept; an online session

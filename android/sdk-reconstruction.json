@@ -1,0 +1,624 @@
+{
+  "schema": 1,
+  "main_flat_sha1": "a4776fbadd2d266f42cf559a3530c2e6454d01a3",
+  "profile": "bt4-b14-rev2-en",
+  "validation_scope": "Recovered EE register/memory contracts and synthetic host tests; no gameplay/device validation",
+  "functions": [
+    {
+      "symbol": "dvCiGetFileSize",
+      "native_signature": "int32_t dvCiGetFileSize(const char *name)",
+      "source": "android/src/bt4_sdk_ci_query.c",
+      "status": "reconstructed"
+    },
+    {
+      "symbol": "dvCiOpen",
+      "native_signature": "Bt4DvdCiWork *dvCiOpen(const char *name, uint32_t unused, uint32_t attributes)",
+      "source": "android/src/bt4_sdk_ci_io.c",
+      "status": "reconstructed"
+    },
+    {
+      "symbol": "dvCiReqRd",
+      "native_signature": "int32_t dvCiReqRd(Bt4DvdCiWork *file, int32_t sectors, void *destination)",
+      "source": "android/src/bt4_sdk_ci_io.c",
+      "status": "reconstructed"
+    },
+    {
+      "symbol": "func_0027BCD0",
+      "native_signature": "void func_0027BCD0(void)",
+      "source": "android/src/bt4_sdk_ci_io.c",
+      "status": "reconstructed"
+    },
+    {
+      "symbol": "func_0027BD48",
+      "native_signature": "void func_0027BD48(uint32_t callback, uint32_t context)",
+      "source": "android/src/bt4_sdk_fields.c",
+      "status": "reconstructed"
+    },
+    {
+      "symbol": "func_0027BDD8",
+      "native_signature": "int32_t func_0027BDD8(const char *name)",
+      "source": "android/src/bt4_sdk_ci_query.c",
+      "status": "reconstructed"
+    },
+    {
+      "symbol": "func_0027C0F0",
+      "native_signature": "void func_0027C0F0(Bt4DvdCiWork *file)",
+      "source": "android/src/bt4_sdk_ci_io.c",
+      "status": "reconstructed"
+    },
+    {
+      "symbol": "func_0027C148",
+      "native_signature": "int32_t func_0027C148(Bt4DvdCiWork *file, int32_t offset, int32_t origin)",
+      "source": "android/src/bt4_sdk_file_fields.c",
+      "status": "reconstructed"
+    },
+    {
+      "symbol": "func_0027C1E0",
+      "native_signature": "int32_t func_0027C1E0(const Bt4DvdCiWork *file)",
+      "source": "android/src/bt4_sdk_file_fields.c",
+      "status": "reconstructed"
+    },
+    {
+      "symbol": "func_0027C3C0",
+      "native_signature": "void func_0027C3C0(Bt4DvdCiWork *file)",
+      "source": "android/src/bt4_sdk_ci_io.c",
+      "status": "reconstructed"
+    },
+    {
+      "symbol": "func_0027C4A8",
+      "native_signature": "int32_t func_0027C4A8(const Bt4DvdCiWork *file)",
+      "source": "android/src/bt4_sdk_file_fields.c",
+      "status": "reconstructed"
+    },
+    {
+      "symbol": "func_0027C4E0",
+      "native_signature": "int32_t func_0027C4E0(void)",
+      "source": "android/src/bt4_sdk_fields.c",
+      "status": "reconstructed"
+    },
+    {
+      "symbol": "func_0027C4E8",
+      "native_signature": "int32_t func_0027C4E8(const Bt4DvdCiWork *file)",
+      "source": "android/src/bt4_sdk_file_fields.c",
+      "status": "reconstructed"
+    },
+    {
+      "symbol": "func_0027C680",
+      "native_signature": "int32_t func_0027C680(const void *target, int32_t command)",
+      "source": "android/src/bt4_sdk_ci_query.c",
+      "status": "reconstructed"
+    },
+    {
+      "symbol": "func_0027F7A0",
+      "native_signature": "void func_0027F7A0(void)",
+      "source": "android/src/bt4_sdk_mf.c",
+      "status": "reconstructed"
+    },
+    {
+      "symbol": "func_0027F7F8",
+      "native_signature": "void func_0027F7F8(uint32_t callback, uint32_t context)",
+      "source": "android/src/bt4_sdk_fields.c",
+      "status": "reconstructed"
+    },
+    {
+      "symbol": "func_0027F810",
+      "native_signature": "int32_t func_0027F810(const char *name)",
+      "source": "android/src/bt4_sdk_mf.c",
+      "status": "reconstructed"
+    },
+    {
+      "symbol": "func_0027F9B8",
+      "native_signature": "void func_0027F9B8(Bt4MfFile *file)",
+      "source": "android/src/bt4_sdk_mf.c",
+      "status": "reconstructed"
+    },
+    {
+      "symbol": "func_0027FA00",
+      "native_signature": "int32_t func_0027FA00(Bt4MfFile *file, int32_t offset, int32_t origin)",
+      "source": "android/src/bt4_sdk_mf.c",
+      "status": "reconstructed"
+    },
+    {
+      "symbol": "func_0027FAC0",
+      "native_signature": "int32_t func_0027FAC0(Bt4MfFile *file)",
+      "source": "android/src/bt4_sdk_mf.c",
+      "status": "reconstructed"
+    },
+    {
+      "symbol": "func_0027FC80",
+      "native_signature": "void func_0027FC80(Bt4MfFile *file)",
+      "source": "android/src/bt4_sdk_mf.c",
+      "status": "reconstructed"
+    },
+    {
+      "symbol": "func_0027FCD0",
+      "native_signature": "int32_t func_0027FCD0(Bt4MfFile *file)",
+      "source": "android/src/bt4_sdk_mf.c",
+      "status": "reconstructed"
+    },
+    {
+      "symbol": "func_0027FD08",
+      "native_signature": "int32_t func_0027FD08(Bt4MfFile *file)",
+      "source": "android/src/bt4_sdk_mf.c",
+      "status": "reconstructed"
+    },
+    {
+      "symbol": "func_0027FD40",
+      "native_signature": "void func_0027FD40(Bt4MfFile *file, int32_t sector_size)",
+      "source": "android/src/bt4_sdk_mf.c",
+      "status": "reconstructed"
+    },
+    {
+      "symbol": "func_0027FDC0",
+      "native_signature": "int32_t func_0027FDC0(Bt4MfFile *file)",
+      "source": "android/src/bt4_sdk_mf.c",
+      "status": "reconstructed"
+    },
+    {
+      "symbol": "func_0027FE80",
+      "native_signature": "int32_t func_0027FE80(void *target, int32_t command)",
+      "source": "android/src/bt4_sdk_mf.c",
+      "status": "reconstructed"
+    },
+    {
+      "symbol": "func_002826A0",
+      "native_signature": "void func_002826A0(Bt4SjMem *object)",
+      "source": "android/src/bt4_sdk_sjmem.c",
+      "status": "reconstructed"
+    },
+    {
+      "symbol": "func_00282758",
+      "native_signature": "uint32_t func_00282758(Bt4SjMem *object)",
+      "source": "android/src/bt4_sdk_sjmem.c",
+      "status": "reconstructed"
+    },
+    {
+      "symbol": "func_002827E8",
+      "native_signature": "void func_002827E8(Bt4SjMem *object, uint32_t callback, uint32_t context)",
+      "source": "android/src/bt4_sdk_sjmem.c",
+      "status": "reconstructed"
+    },
+    {
+      "symbol": "func_00282898",
+      "native_signature": "void func_00282898(Bt4SjMem *object)",
+      "source": "android/src/bt4_sdk_sjmem.c",
+      "status": "reconstructed"
+    },
+    {
+      "symbol": "func_00282930",
+      "native_signature": "int32_t func_00282930(Bt4SjMem *object, int32_t mode)",
+      "source": "android/src/bt4_sdk_sjmem.c",
+      "status": "reconstructed"
+    },
+    {
+      "symbol": "func_00282978",
+      "native_signature": "void func_00282978(Bt4SjMem *object, int32_t mode, int32_t requested, Bt4SjChunk *out)",
+      "source": "android/src/bt4_sdk_sjmem.c",
+      "status": "reconstructed"
+    },
+    {
+      "symbol": "func_00282AB8",
+      "native_signature": "void func_00282AB8(Bt4SjMem *object, int32_t mode, Bt4SjChunk *chunk)",
+      "source": "android/src/bt4_sdk_sjmem.c",
+      "status": "reconstructed"
+    },
+    {
+      "symbol": "func_00282BA8",
+      "native_signature": "void func_00282BA8(Bt4SjMem *object, int32_t mode, Bt4SjChunk *chunk)",
+      "source": "android/src/bt4_sdk_sjmem.c",
+      "status": "reconstructed"
+    },
+    {
+      "symbol": "func_00282CF8",
+      "native_signature": "int32_t func_00282CF8(Bt4SjMem *object, int32_t mode, int32_t requested, int32_t *available)",
+      "source": "android/src/bt4_sdk_sjmem.c",
+      "status": "reconstructed"
+    },
+    {
+      "symbol": "func_00283278",
+      "native_signature": "void func_00283278(Bt4SjRbf *object)",
+      "source": "android/src/bt4_sdk_sjrbf.c",
+      "status": "reconstructed"
+    },
+    {
+      "symbol": "func_00283330",
+      "native_signature": "uint32_t func_00283330(const void *object)",
+      "source": "android/src/bt4_sdk_fields.c",
+      "status": "reconstructed"
+    },
+    {
+      "symbol": "func_00283338",
+      "native_signature": "void func_00283338(void *object, uint32_t callback, uint32_t context)",
+      "source": "android/src/bt4_sdk_fields.c",
+      "status": "reconstructed"
+    },
+    {
+      "symbol": "func_00283348",
+      "native_signature": "void func_00283348(Bt4SjRbf *object)",
+      "source": "android/src/bt4_sdk_sjrbf.c",
+      "status": "reconstructed"
+    },
+    {
+      "symbol": "func_002833F8",
+      "native_signature": "int32_t func_002833F8(Bt4SjRbf *object, int32_t mode)",
+      "source": "android/src/bt4_sdk_sjrbf.c",
+      "status": "reconstructed"
+    },
+    {
+      "symbol": "func_00283448",
+      "native_signature": "void func_00283448(Bt4SjRbf *object, int32_t mode, int32_t requested, Bt4SjChunk *out)",
+      "source": "android/src/bt4_sdk_sjrbf.c",
+      "status": "reconstructed"
+    },
+    {
+      "symbol": "func_00283648",
+      "native_signature": "void func_00283648(Bt4SjRbf *object, int32_t mode, Bt4SjChunk *chunk)",
+      "source": "android/src/bt4_sdk_sjrbf.c",
+      "status": "reconstructed"
+    },
+    {
+      "symbol": "func_00283818",
+      "native_signature": "void func_00283818(Bt4SjRbf *object, int32_t mode, Bt4SjChunk *chunk)",
+      "source": "android/src/bt4_sdk_sjrbf.c",
+      "status": "reconstructed"
+    },
+    {
+      "symbol": "func_00283A48",
+      "native_signature": "int32_t func_00283A48(Bt4SjRbf *object, int32_t mode, int32_t requested, int32_t *available)",
+      "source": "android/src/bt4_sdk_sjrbf.c",
+      "status": "reconstructed"
+    },
+    {
+      "symbol": "func_00283E98",
+      "native_signature": "void func_00283E98(Bt4SjUni *object)",
+      "source": "android/src/bt4_sdk_sjuni.c",
+      "status": "reconstructed"
+    },
+    {
+      "symbol": "func_00283F50",
+      "native_signature": "uint32_t func_00283F50(Bt4SjUni *object)",
+      "source": "android/src/bt4_sdk_sjuni.c",
+      "status": "reconstructed"
+    },
+    {
+      "symbol": "func_00283FE0",
+      "native_signature": "void func_00283FE0(Bt4SjUni *object, uint32_t callback, uint32_t context)",
+      "source": "android/src/bt4_sdk_sjuni.c",
+      "status": "reconstructed"
+    },
+    {
+      "symbol": "func_00284090",
+      "native_signature": "void func_00284090(Bt4SjUni *object)",
+      "source": "android/src/bt4_sdk_sjuni.c",
+      "status": "reconstructed"
+    },
+    {
+      "symbol": "func_00284198",
+      "native_signature": "int32_t func_00284198(Bt4SjUni *object, int32_t mode)",
+      "source": "android/src/bt4_sdk_sjuni.c",
+      "status": "reconstructed"
+    },
+    {
+      "symbol": "func_00284298",
+      "native_signature": "void func_00284298(Bt4SjUni *object, int32_t mode, int32_t requested, Bt4SjChunk *out)",
+      "source": "android/src/bt4_sdk_sjuni.c",
+      "status": "reconstructed"
+    },
+    {
+      "symbol": "func_00284448",
+      "native_signature": "void func_00284448(Bt4SjUni *object, int32_t mode, Bt4SjChunk *chunk)",
+      "source": "android/src/bt4_sdk_sjuni.c",
+      "status": "reconstructed"
+    },
+    {
+      "symbol": "func_002845C0",
+      "native_signature": "void func_002845C0(Bt4SjUni *object, int32_t mode, Bt4SjChunk *chunk)",
+      "source": "android/src/bt4_sdk_sjuni.c",
+      "status": "reconstructed"
+    },
+    {
+      "symbol": "func_00284730",
+      "native_signature": "int32_t func_00284730(Bt4SjUni *object, int32_t mode, int32_t requested, int32_t *available)",
+      "source": "android/src/bt4_sdk_sjuni.c",
+      "status": "reconstructed"
+    },
+    {
+      "symbol": "func_0028B7C0",
+      "native_signature": "void func_0028B7C0(void)",
+      "source": "android/src/bt4_sdk_ci_io.c",
+      "status": "reconstructed"
+    },
+    {
+      "symbol": "func_0028B838",
+      "native_signature": "void func_0028B838(uint32_t callback, uint32_t context)",
+      "source": "android/src/bt4_sdk_fields.c",
+      "status": "reconstructed"
+    },
+    {
+      "symbol": "func_0028B850",
+      "native_signature": "int32_t func_0028B850(const char *name)",
+      "source": "android/src/bt4_sdk_ci_query.c",
+      "status": "reconstructed"
+    },
+    {
+      "symbol": "func_0028B8F0",
+      "native_signature": "int32_t func_0028B8F0(const char *name)",
+      "source": "android/src/bt4_sdk_ci_query.c",
+      "status": "reconstructed"
+    },
+    {
+      "symbol": "func_0028BD28",
+      "native_signature": "void func_0028BD28(Bt4HostCiWork *file)",
+      "source": "android/src/bt4_sdk_ci_io.c",
+      "status": "reconstructed"
+    },
+    {
+      "symbol": "func_0028BDC8",
+      "native_signature": "int32_t func_0028BDC8(Bt4HostCiWork *file, int32_t offset, int32_t origin)",
+      "source": "android/src/bt4_sdk_file_fields.c",
+      "status": "reconstructed"
+    },
+    {
+      "symbol": "func_0028BE60",
+      "native_signature": "int32_t func_0028BE60(const Bt4HostCiWork *file)",
+      "source": "android/src/bt4_sdk_file_fields.c",
+      "status": "reconstructed"
+    },
+    {
+      "symbol": "func_0028C028",
+      "native_signature": "void func_0028C028(Bt4HostCiWork *file)",
+      "source": "android/src/bt4_sdk_ci_io.c",
+      "status": "reconstructed"
+    },
+    {
+      "symbol": "func_0028C120",
+      "native_signature": "int32_t func_0028C120(const Bt4HostCiWork *file)",
+      "source": "android/src/bt4_sdk_file_fields.c",
+      "status": "reconstructed"
+    },
+    {
+      "symbol": "func_0028C158",
+      "native_signature": "int32_t func_0028C158(void)",
+      "source": "android/src/bt4_sdk_fields.c",
+      "status": "reconstructed"
+    },
+    {
+      "symbol": "func_0028C160",
+      "native_signature": "int32_t func_0028C160(const Bt4HostCiWork *file)",
+      "source": "android/src/bt4_sdk_file_fields.c",
+      "status": "reconstructed"
+    },
+    {
+      "symbol": "func_0028C288",
+      "native_signature": "int32_t func_0028C288(const void *target, int32_t command)",
+      "source": "android/src/bt4_sdk_ci_query.c",
+      "status": "reconstructed"
+    },
+    {
+      "symbol": "func_0029F2F8",
+      "native_signature": "void func_0029F2F8(const Bt4MmiBlock *block)",
+      "source": "android/src/bt4_sdk_pixels.c",
+      "status": "reconstructed"
+    },
+    {
+      "symbol": "func_0029F370",
+      "native_signature": "void func_0029F370(const Bt4MmiBlock *block)",
+      "source": "android/src/bt4_sdk_pixels.c",
+      "status": "reconstructed"
+    },
+    {
+      "symbol": "func_0029F408",
+      "native_signature": "void func_0029F408(const Bt4MmiBlock *block)",
+      "source": "android/src/bt4_sdk_pixels.c",
+      "status": "reconstructed"
+    },
+    {
+      "symbol": "func_0029F4C0",
+      "native_signature": "void func_0029F4C0(const Bt4MmiBlock *block)",
+      "source": "android/src/bt4_sdk_pixels.c",
+      "status": "reconstructed"
+    },
+    {
+      "symbol": "func_0029F590",
+      "native_signature": "void func_0029F590(const Bt4MmiBlock *block)",
+      "source": "android/src/bt4_sdk_pixels.c",
+      "status": "reconstructed"
+    },
+    {
+      "symbol": "func_0029F640",
+      "native_signature": "void func_0029F640(const Bt4MmiBlock *block)",
+      "source": "android/src/bt4_sdk_pixels.c",
+      "status": "reconstructed"
+    },
+    {
+      "symbol": "func_0029F6F8",
+      "native_signature": "void func_0029F6F8(const Bt4MmiBlock *block)",
+      "source": "android/src/bt4_sdk_pixels.c",
+      "status": "reconstructed"
+    },
+    {
+      "symbol": "func_0029F7F0",
+      "native_signature": "void func_0029F7F0(const Bt4MmiBlock *block)",
+      "source": "android/src/bt4_sdk_pixels.c",
+      "status": "reconstructed"
+    },
+    {
+      "symbol": "func_0029F8F0",
+      "native_signature": "void func_0029F8F0(const Bt4MmiBlock *block)",
+      "source": "android/src/bt4_sdk_pixels.c",
+      "status": "reconstructed"
+    },
+    {
+      "symbol": "func_0029F990",
+      "native_signature": "void func_0029F990(const Bt4MmiBlock *block)",
+      "source": "android/src/bt4_sdk_pixels.c",
+      "status": "reconstructed"
+    },
+    {
+      "symbol": "func_0029FA40",
+      "native_signature": "void func_0029FA40(const Bt4MmiBlock *block)",
+      "source": "android/src/bt4_sdk_pixels.c",
+      "status": "reconstructed"
+    },
+    {
+      "symbol": "func_0029FB20",
+      "native_signature": "void func_0029FB20(const Bt4MmiBlock *block)",
+      "source": "android/src/bt4_sdk_pixels.c",
+      "status": "reconstructed"
+    },
+    {
+      "symbol": "func_0029FC08",
+      "native_signature": "void func_0029FC08(const Bt4MmiBlock *block)",
+      "source": "android/src/bt4_sdk_pixels.c",
+      "status": "reconstructed"
+    },
+    {
+      "symbol": "func_0029FCE0",
+      "native_signature": "void func_0029FCE0(const Bt4MmiBlock *block)",
+      "source": "android/src/bt4_sdk_pixels.c",
+      "status": "reconstructed"
+    },
+    {
+      "symbol": "func_0029FDB0",
+      "native_signature": "void func_0029FDB0(const Bt4MmiBlock *block)",
+      "source": "android/src/bt4_sdk_pixels.c",
+      "status": "reconstructed"
+    },
+    {
+      "symbol": "func_0029FED0",
+      "native_signature": "void func_0029FED0(const Bt4MmiBlock *block)",
+      "source": "android/src/bt4_sdk_pixels.c",
+      "status": "reconstructed"
+    },
+    {
+      "symbol": "func_002A09D8",
+      "native_signature": "void func_002A09D8(void *decoder)",
+      "source": "android/src/bt4_sdk_ipu.c",
+      "status": "reconstructed"
+    },
+    {
+      "symbol": "func_002A0B18",
+      "native_signature": "void func_002A0B18(void *decoder)",
+      "source": "android/src/bt4_sdk_ipu.c",
+      "status": "reconstructed"
+    },
+    {
+      "symbol": "func_002A0C00",
+      "native_signature": "int32_t func_002A0C00(const void *decoder)",
+      "source": "android/src/bt4_sdk_ipu_error.c",
+      "status": "reconstructed"
+    },
+    {
+      "symbol": "func_002A0C10",
+      "native_signature": "int32_t func_002A0C10(const void *decoder)",
+      "source": "android/src/bt4_sdk_ipu_error.c",
+      "status": "reconstructed"
+    },
+    {
+      "symbol": "func_002A0C20",
+      "native_signature": "void func_002A0C20(void *decoder)",
+      "source": "android/src/bt4_sdk_ipu.c",
+      "status": "reconstructed"
+    },
+    {
+      "symbol": "func_002A0E08",
+      "native_signature": "int32_t func_002A0E08(const void *decoder)",
+      "source": "android/src/bt4_sdk_ipu_error.c",
+      "status": "reconstructed"
+    },
+    {
+      "symbol": "func_002A0E18",
+      "native_signature": "int32_t func_002A0E18(const void *decoder)",
+      "source": "android/src/bt4_sdk_ipu_error.c",
+      "status": "reconstructed"
+    },
+    {
+      "symbol": "func_002A11E8",
+      "native_signature": "void func_002A11E8(void *decoder)",
+      "source": "android/src/bt4_sdk_ipu.c",
+      "status": "reconstructed"
+    },
+    {
+      "symbol": "func_002A1278",
+      "native_signature": "void func_002A1278(void *decoder)",
+      "source": "android/src/bt4_sdk_ipu.c",
+      "status": "reconstructed"
+    },
+    {
+      "symbol": "func_002A1310",
+      "native_signature": "void func_002A1310(void *decoder)",
+      "source": "android/src/bt4_sdk_ipu.c",
+      "status": "reconstructed"
+    },
+    {
+      "symbol": "func_002BA2D0",
+      "native_signature": "int32_t func_002BA2D0(void *destination, const void *source, uint32_t bytes)",
+      "source": "android/src/bt4_sdk_memory.c",
+      "status": "reconstructed"
+    },
+    {
+      "symbol": "func_002BA308",
+      "native_signature": "void *func_002BA308(const void *start, const void *end, uint32_t value)",
+      "source": "android/src/bt4_sdk_memory.c",
+      "status": "reconstructed"
+    },
+    {
+      "symbol": "func_002BA518",
+      "native_signature": "int32_t func_002BA518(void *destination, const void *source, uint32_t bytes)",
+      "source": "android/src/bt4_sdk_memory.c",
+      "status": "reconstructed"
+    },
+    {
+      "symbol": "func_002BA688",
+      "native_signature": "int32_t func_002BA688(void *destination, const void *source, uint32_t bytes)",
+      "source": "android/src/bt4_sdk_memory.c",
+      "status": "reconstructed"
+    },
+    {
+      "symbol": "func_002BA938",
+      "native_signature": "int32_t func_002BA938(void *destination, const void *source, uint32_t bytes)",
+      "source": "android/src/bt4_sdk_memory.c",
+      "status": "reconstructed"
+    },
+    {
+      "symbol": "func_002BC748",
+      "native_signature": "int32_t func_002BC748(void *destination, const void *source, uint32_t bytes)",
+      "source": "android/src/bt4_sdk_memory.c",
+      "status": "reconstructed"
+    },
+    {
+      "symbol": "htCiOpen",
+      "native_signature": "Bt4HostCiWork *htCiOpen(const char *name, uint32_t unused, uint32_t attributes)",
+      "source": "android/src/bt4_sdk_ci_io.c",
+      "status": "reconstructed"
+    },
+    {
+      "symbol": "htCiReqRd",
+      "native_signature": "int32_t htCiReqRd(Bt4HostCiWork *file, int32_t sectors, void *destination)",
+      "source": "android/src/bt4_sdk_ci_io.c",
+      "status": "reconstructed"
+    },
+    {
+      "symbol": "mfCiOpen",
+      "native_signature": "Bt4MfFile *mfCiOpen(const char *name, uint32_t unused, uint32_t attributes)",
+      "source": "android/src/bt4_sdk_mf.c",
+      "status": "reconstructed"
+    },
+    {
+      "symbol": "mfCiReqRd",
+      "native_signature": "int32_t mfCiReqRd(Bt4MfFile *file, int32_t sectors, void *destination)",
+      "source": "android/src/bt4_sdk_mf.c",
+      "status": "reconstructed"
+    }
+  ],
+  "data": [
+    {
+      "symbol": "func_00100000",
+      "status": "reclassified_scalar",
+      "table": "D_002EB190",
+      "offset": 20,
+      "value": "0x00100000",
+      "meaning": "Second TLB record EntryHi; not a code pointer"
+    }
+  ]
+}

@@ -1,3 +1,4 @@
+#include "../port_read_file.h"
 /*
  * CRI ADX streams (music, voices, the movies' sound) on PC: the part of CRI's ADXT library the game calls, with the
  * decoding done here and the output through SDL.
@@ -105,7 +106,7 @@ static int adx_blanks(const char *path) {
             return PortSongs_IsFile(path) ? -1 : PortMa_Blanks(path);
         }
     }
-    fp = fopen(path, "rb");
+    fp = Port_ReadFile(path);
     if (fp == NULL) {
         return 0;
     }
@@ -571,7 +572,7 @@ static const char *voice_own_path(const char *path, char *buf, size_t size) {
     }
     snprintf(buf, size, "%.*s%05d.bin", (int)(num - path), path, other - 0xD48);
     {
-        FILE *fp = fopen(buf, "rb");
+        FILE *fp = Port_ReadFile(buf);
         if (fp == NULL) {
             return path; /* (not there: the default one) */
         }
@@ -600,7 +601,7 @@ static void start(Player *p, const char *path) {
     if (!device()) {
         return;
     }
-    fp = fopen(path, "rb");
+    fp = Port_ReadFile(path);
     if (fp == NULL) {
         fprintf(stderr, "bt3: sound file not found: %s\n", path);
         return;

@@ -20,6 +20,17 @@ typedef struct Bt4AddressWindow {
     uintptr_t base;
 } Bt4AddressWindow;
 
+typedef struct Bt4MapPlan {
+    uintptr_t window, requested, aligned;
+    uint32_t guest;
+    size_t bytes, page_size, mapped_bytes;
+} Bt4MapPlan;
+typedef struct Bt4MapTrace {
+    Bt4MapPlan plan;
+    uintptr_t returned;
+    int attempted, protection, flags, result, error, noreplace_error, used_hint, cleanup_error;
+} Bt4MapTrace;
+
 /* 0 = success, negatives denote a rejected operation. */
 enum {
     BT4_ADDR_OK = 0,
@@ -47,6 +58,14 @@ int Bt4Addr_ToGuest(const Bt4AddressWindow *window, const void *host,
  */
 int Bt4Addr_MapWritable(const Bt4AddressWindow *window, uint32_t guest,
                         size_t bytes, void **mapped_out);
+/* Pure arithmetic, also tested with simulated 16/64 KiB page sizes. */
+int Bt4Addr_Plan(const Bt4AddressWindow *window,uint32_t guest,size_t bytes,
+                 size_t page_size,Bt4MapPlan *plan);
+/* Only NONE or READ|WRITE; never executable. Exact-address hint fallback is
+   allowed only when the kernel rejects NOREPLACE as unsupported. All returned
+   addresses are checked; a different mapping is immediately released. */
+int Bt4Addr_Map(const Bt4AddressWindow *window,uint32_t guest,size_t bytes,
+                int protection,void **mapped_out,Bt4MapTrace *trace);
 
 #ifdef __cplusplus
 }

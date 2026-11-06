@@ -1,3 +1,4 @@
+#include "../port_read_file.h"
 /*
  * Sound effects on PC: the game's own sound driver for the PS2's second processor (SOUNDS.IRX), replaced.
  *
@@ -473,7 +474,7 @@ static uint8_t *bank_file(int flid, long *size) {
     uint8_t *b = NULL;
     FILE *fp;
 
-    if (!Port_FilePath(1, flid, NULL, path, sizeof(path)) || (fp = fopen(path, "rb")) == NULL) {
+    if (!Port_FilePath(1, flid, NULL, path, sizeof(path)) || (fp = Port_ReadFile(path)) == NULL) {
         return NULL;
     }
     fseek(fp, 0, SEEK_END);
@@ -521,7 +522,7 @@ void Port_SeActorFile(int actor,int file){
     if(file>=0x20000){part=3;index=file-0x20000;}
     else if(file>=0x10CC0){part=0;index=file-0x10CC0;}
     else if(file>=0xD48){part=2;index=file-0xD48;}else{part=1;index=file-1;}
-    if(!Port_FilePath(part,index,NULL,path,sizeof(path))||(fp=fopen(path,"rb"))==NULL)return;
+    if(!Port_FilePath(part,index,NULL,path,sizeof(path))||(fp=Port_ReadFile(path))==NULL)return;
     fseek(fp,0,SEEK_END);size=ftell(fp);rewind(fp);
     if(size<64||size>4*1024*1024){fclose(fp);return;}
     data=malloc((size_t)size);if(!data){fclose(fp);return;}

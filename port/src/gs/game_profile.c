@@ -1,5 +1,9 @@
 /* Full disc profiles. Selection precedes game data loading; no live data swap. */
 #include "game_profile.h"
+#include "../bt4_base_profile.h"
+#ifdef __ANDROID__
+#include "../../../android/include/bt4_iso_source.h"
+#endif
 #include <SDL3/SDL.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -53,11 +57,27 @@ static void profile_env_set(const char *name,const char *value){
 }
 static int readable(const char *root,const char *relative){
     char path[1800];FILE *f;
+#ifdef __ANDROID__
+    if(Bt4Iso_IsMounted()&&!strncmp(relative,"disc/",5)) {
+        f=Bt4Iso_OpenFile(relative);if(!f)return 0;fclose(f);return 1;
+    }
+#endif
     if(SDL_snprintf(path,sizeof(path),"%s/%s",root,relative)>=(int)sizeof(path))return 0;
     f=fopen(path,"rb");if(!f)return 0;fclose(f);return 1;
 }
 static int base_language(const char *root){
     char path[1800],line[160]={0};FILE *f;
+    Bt4FileFingerprint fingerprint;int detected=-1;
+#ifdef __ANDROID__
+    if(Bt4Iso_IsMounted())f=Bt4Iso_OpenFile("disc/SLUS_219.78");
+    else
+#endif
+    { SDL_snprintf(path,sizeof(path),"%s/disc/SLUS_219.78",root);f=fopen(path,"rb"); }
+    if(f) { if(Bt4Base_Fingerprint(f,&fingerprint))detected=Bt4Base_MainLanguage(&fingerprint);fclose(f); }
+    if(detected>=0)return detected;
+    /* Legacy desktop installer hints are presentation fallback only; the
+       identity verifier still rejects unknown bytes. Android preflight rejects
+       unknown fingerprints before reaching this legacy fallback. */
     SDL_snprintf(path,sizeof(path),"%s/.bt4-language",root);f=fopen(path,"rb");
     if(f){fgets(line,sizeof(line),f);fclose(f);return !strncmp(line,"en",2);}
     SDL_snprintf(path,sizeof(path),"%s/.installed-bt4-b14rev2",root);f=fopen(path,"rb");
@@ -77,6 +97,9 @@ void Port_GameProfileInit(void){
         else SDL_snprintf(sRoots[i],sizeof(sRoots[i]),"%s/languages/%s",root,i?"en":"es");
         sReady[i]=readable(sRoots[i],"disc/SLUS_219.78")&&readable(sRoots[i],"disc/BIN/DBZP.BIN")&&
             (i==installed||readable(sRoots[i],".installed-bt4-b14rev2"));
+#ifdef __ANDROID__
+        if(Bt4Iso_IsMounted()&&i!=installed)sReady[i]=0;
+#endif
     }
     {char file[1800];FILE *f;int mask=3;
      SDL_snprintf(file,sizeof(file),"%stbo/languages.ini",base?base:"");f=fopen(file,"rb");

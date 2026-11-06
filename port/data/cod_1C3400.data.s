@@ -4432,7 +4432,7 @@ D_002EB0C0:
 .globl D_002EB190
 D_002EB190:
     .space 20
-    .long func_00100000
+    .long 0x00100000
     .space 264
 .globl D_002EB2B0
 D_002EB2B0:

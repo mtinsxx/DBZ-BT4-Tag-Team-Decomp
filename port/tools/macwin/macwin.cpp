@@ -46,7 +46,10 @@
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/raw_ostream.h"
+#include "llvm/Transforms/Utils/ModuleUtils.h"
+#include "llvm/Transforms/Utils/BasicBlockUtils.h"
 #include <map>
+#include <set>
 #include <vector>
 
 using namespace llvm;
@@ -74,6 +77,10 @@ cl::opt<bool> PortModule("bt3-port", cl::desc("a port source, not the game's"), 
 // likewise, and the call is a fixed-argument one when the definition is.
 cl::opt<std::string> Defs("bt3-defs", cl::desc("write this module's function definitions to FILE, change nothing"), cl::init(""));
 cl::opt<std::string> Sigs("bt3-sigs", cl::desc("the program's function definitions (FILE from -bt3-defs)"), cl::init(""));
+// Android ELF cannot encode a 32-bit (symbol - load bias) dynamic relocation.
+// Keep the desktop pass unchanged unless this mode is explicitly selected.
+cl::opt<bool> Elf("bt3-elf", cl::desc("ASLR-safe ELF guest pointers and AAPCS64 indirect-call adaptation"), cl::init(false));
+cl::opt<bool> Native("bt3-native", cl::desc("preserve hardware floating point in native port modules"), cl::init(false));
 
 constexpr unsigned GAME = 271; // __ptr32 __uptr: the game's 4-byte pointers
 constexpr unsigned HOST64 = 272; // __ptr64: ordinary 64-bit pointers (ptr32.py uses them for variadic arguments)
@@ -89,16 +96,20 @@ struct Window {
     std::map<Constant *, Constant *> Done;
     std::map<Constant *, Constant *> HostOf; // a 4-byte pointer constant made from a host address -> that address
     bool Failed = false;
+    std::set<std::string> NativeFloat;
+    std::set<Function *> NativeThunks;
 
     explicit Window(Module &M)
         : M(M), Ctx(M.getContext()), I64(Type::getInt64Ty(Ctx)), I32(Type::getInt32Ty(Ctx)), I8(Type::getInt8Ty(Ctx)),
           Host(PointerType::get(Ctx, 0)), Game(PointerType::get(Ctx, GAME)) {}
 
     Constant *window() {
+        if (Elf) report_fatal_error("bt3-elf: a constant image-relative window is forbidden");
         if (!W) {
-            GlobalVariable *mh = M.getGlobalVariable("_mh_execute_header");
+            const char *anchor = Elf ? "__ehdr_start" : "_mh_execute_header";
+            GlobalVariable *mh = M.getGlobalVariable(anchor);
             if (!mh) {
-                mh = new GlobalVariable(M, I8, true, GlobalValue::ExternalLinkage, nullptr, "_mh_execute_header");
+                mh = new GlobalVariable(M, I8, true, GlobalValue::ExternalLinkage, nullptr, anchor);
                 mh->setVisibility(GlobalValue::HiddenVisibility);
                 mh->setDSOLocal(true);
             }
@@ -204,7 +215,7 @@ struct Window {
     }
     Value *host(IRBuilder<> &B, Value *off, bool mayBeNull, PointerType *To) {
         if (auto *C = dyn_cast<Constant>(off)) {
-            if (C->isNullValue() || HostOf.count(C)) {
+            if (C->isNullValue() || (!Elf && HostOf.count(C))) {
                 return hostC(C, To);
             }
             mayBeNull = false;
@@ -220,11 +231,17 @@ struct Window {
         return To->getAddressSpace() == 0 ? p : B.CreateAddrSpaceCast(p, To);
     }
     Value *game(IRBuilder<> &B, Value *p, bool mayBeNull = true) {
-        if (auto *C = dyn_cast<Constant>(p)) {
+        if (!Elf || isa<ConstantPointerNull>(p)) if (auto *C = dyn_cast<Constant>(p)) {
             return gameC(C);
         }
         if (p->getType()->getPointerAddressSpace() != 0) {
             p = B.CreateAddrSpaceCast(p, Host);
+        }
+        if (Elf) {
+            // Also checks host allocations and callbacks accidentally stored outside
+            // the guest window. Silent truncation would corrupt an unrelated object.
+            auto encode = M.getOrInsertFunction("Bt4Android_EncodePointer", I32, Host);
+            return B.CreateIntToPtr(B.CreateCall(encode, {p}), Game, "w.game");
         }
         Value *off = B.CreateIntToPtr(B.CreateSub(B.CreatePtrToInt(p, I64), B.CreatePtrToInt(window(), I64)), Game, "w.game");
         return !mayBeNull || knownNonNull(p) ? off : B.CreateSelect(B.CreateIsNull(p), ConstantPointerNull::get(Game), off);
@@ -243,10 +260,38 @@ struct Window {
             work.push_back(&I);
         }
         for (Instruction *I : work) {
+            if (Elf) {
+                if (auto *PN = dyn_cast<PHINode>(I)) {
+                    // A PHI operand is evaluated on its incoming edge, not
+                    // before the PHI. lowerConstant can emit checked encoding
+                    // calls: putting them in the merge block breaks PHI order
+                    // and dominance, and hoisting to a shared predecessor
+                    // would execute checks on a branch which never uses them.
+                    unsigned n = 0;
+                    while (n < PN->getNumIncomingValues()) {
+                        auto *C = dyn_cast<Constant>(PN->getIncomingValue(n));
+                        if (C && needsRuntime(C)) {
+                            BasicBlock *Pred = PN->getIncomingBlock(n);
+                            if (Pred->getTerminator()->getNumSuccessors() > 1) {
+                                if (!SplitEdge(Pred, PN->getParent()))
+                                    report_fatal_error("bt3-elf: cannot split constant PHI edge");
+                                // Splitting may merge duplicate switch edges
+                                // and update incoming indices in every PHI.
+                                n = 0;
+                                continue;
+                            }
+                            IRBuilder<> CB(Pred->getTerminator());
+                            PN->setIncomingValue(n, lowerConstant(C, CB));
+                        }
+                        ++n;
+                    }
+                }
+            }
             for (Use &U : I->operands()) {
                 if (auto *C = dyn_cast<Constant>(U.get())) {
                     if (!isa<BasicBlock>(U.get())) {
-                        Constant *f = fixC(C);
+                        IRBuilder<> CB(I);
+                        Value *f = Elf ? lowerConstant(C, CB) : fixC(C);
                         if (f != C) {
                             U.set(f);
                         }
@@ -468,12 +513,217 @@ struct Window {
         }
         return FT->isVarArg() ? k + "." : k;
     }
+    static bool floatingABI(FunctionType *FT) {
+        if (FT->getReturnType()->isFloatingPointTy()) return true;
+        for (Type *T : FT->params()) if (T->isFloatingPointTy()) return true;
+        return false;
+    }
+    void bridgeNativeFloat(CallInst *CI, const std::map<std::string, std::string> &db) {
+        Function *F = CI->getCalledFunction();
+        if (!Elf || Native || !F || F->isIntrinsic() || !F->isDeclaration()) return;
+        bool fp = CI->getType()->isFloatingPointTy();
+        for (Value *A : CI->args()) fp |= A->getType()->isFloatingPointTy();
+        if (!fp || (db.count(F->getName().str()) && !NativeFloat.count(F->getName().str()))) return;
+        // Software-float code uses integer registers. A noinline hardware-FP
+        // thunk is required even for variadic libc calls (e.g. fprintf's doubles).
+        auto bits = [&](Type *T) -> Type * {
+            if (T->isFloatTy()) return I32;
+            if (T->isDoubleTy()) return I64;
+            if (T->isFloatingPointTy()) report_fatal_error("bt3-elf: unsupported native floating-point width");
+            return T;
+        };
+        std::vector<Type *> params;
+        for (Value *A : CI->args()) params.push_back(bits(A->getType()));
+        Type *RT = bits(CI->getType());
+        Function *Thunk = Function::Create(FunctionType::get(RT, params, false),
+            GlobalValue::InternalLinkage, "bt4.native." + F->getName(), M);
+        NativeThunks.insert(Thunk);
+        Thunk->addFnAttr(Attribute::NoInline);
+        if (M.getTargetTriple().isAArch64()) Thunk->addFnAttr("target-features", "+fp-armv8,+neon");
+        IRBuilder<> TB(BasicBlock::Create(Ctx, "entry", Thunk));
+        std::vector<Value *> nativeArgs;
+        unsigned n = 0;
+        for (Argument &A : Thunk->args()) {
+            Type *T = CI->getArgOperand(n++)->getType();
+            nativeArgs.push_back(T->isFloatingPointTy() ? TB.CreateBitCast(&A, T) : &A);
+        }
+        Value *Result = TB.CreateCall(CI->getFunctionType(), F, nativeArgs);
+        if (RT->isVoidTy()) TB.CreateRetVoid();
+        else TB.CreateRet(CI->getType()->isFloatingPointTy() ? TB.CreateBitCast(Result, RT) : Result);
+        IRBuilder<> B(CI);
+        std::vector<Value *> softArgs;
+        for (Value *A : CI->args()) softArgs.push_back(A->getType()->isFloatingPointTy() ? B.CreateBitCast(A, bits(A->getType())) : A);
+        Value *R = B.CreateCall(Thunk, softArgs);
+        if (CI->getType()->isFloatingPointTy()) R = B.CreateBitCast(R, CI->getType());
+        CI->replaceAllUsesWith(R);
+        CI->eraseFromParent();
+    }
+
+    // Only constants which need guest translation become runtime instructions.
+    // Ordinary 64-bit ELF symbol relocations remain available to the linker.
+    bool needsRuntime(Constant *C) {
+        if (isa<GlobalValue>(C) || isa<ConstantData>(C)) return false;
+        if (auto *CE = dyn_cast<ConstantExpr>(C)) {
+            if (CE->getOpcode() == Instruction::AddrSpaceCast &&
+                (isGame(CE->getType()) || isGame(CE->getOperand(0)->getType()))) return true;
+            if (!PortModule && CE->getOpcode() == Instruction::PtrToInt &&
+                CE->getType()->getIntegerBitWidth() <= 32 && isHostLike(CE->getOperand(0)->getType())) return true;
+            if (!PortModule && CE->getOpcode() == Instruction::Trunc &&
+                CE->getType()->getIntegerBitWidth() <= 32) {
+                auto *PI = dyn_cast<ConstantExpr>(CE->getOperand(0));
+                if (PI && PI->getOpcode() == Instruction::PtrToInt && isHostLike(PI->getOperand(0)->getType())) return true;
+            }
+        }
+        for (Value *O : C->operands()) if (needsRuntime(cast<Constant>(O))) return true;
+        return false;
+    }
+    Value *lowerConstant(Constant *C, IRBuilder<> &B) {
+        if (!needsRuntime(C)) return C;
+        if (auto *CE = dyn_cast<ConstantExpr>(C)) {
+            Value *V = lowerConstant(CE->getOperand(0), B);
+            if (CE->getOpcode() == Instruction::AddrSpaceCast) {
+                if (isGame(CE->getType())) return game(B, V);
+                if (isGame(V->getType())) return host(B, V, true, cast<PointerType>(CE->getType()));
+            }
+            if (!PortModule && CE->getOpcode() == Instruction::PtrToInt &&
+                CE->getType()->getIntegerBitWidth() <= 32 && isHostLike(V->getType()))
+                return B.CreatePtrToInt(game(B, V), CE->getType());
+            if (!PortModule && CE->getOpcode() == Instruction::Trunc && CE->getType()->getIntegerBitWidth() <= 32) {
+                auto *PI = dyn_cast<ConstantExpr>(CE->getOperand(0));
+                if (PI && PI->getOpcode() == Instruction::PtrToInt && isHostLike(PI->getOperand(0)->getType()))
+                    return B.CreatePtrToInt(game(B, lowerConstant(PI->getOperand(0), B)), CE->getType());
+            }
+            Instruction *I = CE->getAsInstruction();
+            for (unsigned n = 0; n < CE->getNumOperands(); ++n)
+                I->setOperand(n, lowerConstant(cast<Constant>(CE->getOperand(n)), B));
+            return B.Insert(I);
+        }
+        Value *V = PoisonValue::get(C->getType());
+        for (unsigned n = 0; n < C->getNumOperands(); ++n) {
+            Value *O = lowerConstant(cast<Constant>(C->getOperand(n)), B);
+            V = C->getType()->isVectorTy() ? B.CreateInsertElement(V, O, n) : B.CreateInsertValue(V, O, {n});
+        }
+        return V;
+    }
+    void elfInitializers() {
+        Function *Init = nullptr;
+        for (GlobalVariable &G : M.globals()) {
+            if (!G.hasInitializer() || !needsRuntime(G.getInitializer())) continue;
+            if (G.isThreadLocal()) report_fatal_error("bt3-elf: guest pointer in TLS initializer is unsupported");
+            if (!Init) {
+                Init = Function::Create(FunctionType::get(Type::getVoidTy(Ctx), false),
+                                        GlobalValue::InternalLinkage, "bt4.relocate", M);
+                BasicBlock::Create(Ctx, "entry", Init);
+            }
+            IRBuilder<> B(&Init->getEntryBlock());
+            Value *V = lowerConstant(G.getInitializer(), B);
+            G.setConstant(false);
+            G.setInitializer(Constant::getNullValue(G.getValueType()));
+            B.CreateStore(V, &G);
+        }
+        if (Init) {
+            IRBuilder<> B(&Init->getEntryBlock());
+            B.CreateRetVoid();
+            appendToGlobalCtors(M, Init, 103);
+        }
+    }
+    void elfSignatures() {
+        // Includes address-taken static functions: a whole-program text symbol
+        // list cannot describe those. ELF relocates these full-width addresses.
+        StructType *Entry = StructType::get(Host, Host);
+        std::vector<Constant *> entries;
+        for (Function &F : M) {
+            // Public functions may be reached from relocated disc tables even
+            // when LLVM sees no address-taking expression in the C sources.
+            if (F.isDeclaration() || (F.hasLocalLinkage() && !F.hasAddressTaken())) continue;
+            IRBuilder<> B(Ctx);
+            std::string signature = (Native && (floatingABI(F.getFunctionType()) || F.isVarArg()) ? "!" : "") + kinds(F.getFunctionType());
+            entries.push_back(ConstantStruct::get(Entry, &F, B.CreateGlobalString(signature, "bt4.signature", 0, &M)));
+        }
+        if (entries.empty()) return;
+        auto *Table = new GlobalVariable(M, ArrayType::get(Entry, entries.size()), true,
+            GlobalValue::InternalLinkage, ConstantArray::get(ArrayType::get(Entry, entries.size()), entries), "bt4.signatures");
+        StructType *Module = StructType::get(Host, Host, I64);
+        auto *Record = new GlobalVariable(M, Module, false, GlobalValue::InternalLinkage,
+            ConstantStruct::get(Module, ConstantPointerNull::get(Host), Table, ConstantInt::get(I64, entries.size())), "bt4.signature.module");
+        // Full host addresses must never enter deterministic game checksums or
+        // rollback snapshots. Use the engine's existing host-only section.
+        Table->setConstant(false);
+        Table->setSection(".porthst");
+        Record->setSection(".porthst");
+        Function *Init = Function::Create(FunctionType::get(Type::getVoidTy(Ctx), false), GlobalValue::InternalLinkage, "bt4.register", M);
+        IRBuilder<> B(BasicBlock::Create(Ctx, "entry", Init));
+        B.CreateCall(M.getOrInsertFunction("Bt4Android_RegisterSignatures", Type::getVoidTy(Ctx), Host), {Record});
+        B.CreateRetVoid();
+        appendToGlobalCtors(M, Init, 102);
+    }
+    void elfIndirect(CallInst *CI) {
+        if (PortModule || CI->getCalledFunction() || CI->isInlineAsm()) return;
+        FunctionType *FT = CI->getFunctionType();
+        IRBuilder<> B(CI);
+        bool fp = floatingABI(FT);
+        for (Value *A : CI->args()) fp |= A->getType()->isFloatingPointTy();
+        if (fp) {
+            // Native floating callbacks need an explicit adapter too. Until
+            // generated, reject that boundary rather than use the wrong ABI.
+            B.CreateCall(M.getOrInsertFunction("Bt4Android_RequireSoftFloatCallback", Type::getVoidTy(Ctx), Host), {CI->getCalledOperand()});
+        }
+        auto kind = M.getOrInsertFunction("Bt4Android_CallKind", I32, Host, I32);
+        auto wantsPointer = [&](unsigned slot, char fallback) {
+            Value *K = B.CreateCall(kind, {CI->getCalledOperand(), ConstantInt::get(I32, slot)});
+            return B.CreateOr(B.CreateICmpEQ(K, ConstantInt::get(I32, 'p')),
+                B.CreateAnd(B.CreateICmpEQ(K, ConstantInt::get(I32, 0)), ConstantInt::getBool(Ctx, fallback == 'p')));
+        };
+        std::vector<Value *> args;
+        std::vector<Type *> params;
+        for (unsigned i = 0; i < CI->arg_size(); ++i) {
+            Value *A = CI->getArgOperand(i);
+            char have = kindOf(A->getType());
+            if (have == 'p' || have == 'i') {
+                Value *P = wantsPointer(i + 1, have);
+                if (have == 'p') {
+                    // Select before encoding: an ordinary host argument which
+                    // stays a host pointer need not belong to the guest window.
+                    Value *ForGame = B.CreateSelect(P, ConstantPointerNull::get(Host), A);
+                    Value *Off = B.CreateZExt(B.CreatePtrToInt(game(B, ForGame), I32), I64);
+                    A = B.CreateSelect(P, B.CreatePtrToInt(A, I64), Off);
+                } else {
+                    Value *Off = B.CreateZExtOrTrunc(A, I32);
+                    Value *Ptr = host(B, B.CreateIntToPtr(Off, Game), true, Host);
+                    A = B.CreateSelect(P, B.CreatePtrToInt(Ptr, I64), B.CreateZExt(Off, I64));
+                }
+            }
+            args.push_back(A);
+            if (i < FT->getNumParams()) params.push_back(A->getType());
+        }
+        char result = kindOf(FT->getReturnType());
+        Type *RT = (result == 'p' || result == 'i') ? I64 : FT->getReturnType();
+        CallInst *N = B.CreateCall(FunctionType::get(RT, params, FT->isVarArg()), CI->getCalledOperand(), args);
+        N->setCallingConv(CI->getCallingConv());
+        N->copyMetadata(*CI);
+        Value *R = N;
+        if (result == 'p' || result == 'i') {
+            Value *P = wantsPointer(0, result);
+            if (result == 'p') {
+                Value *Ptr = host(B, B.CreateIntToPtr(B.CreateTrunc(N, I32), Game), true, Host);
+                R = B.CreateSelect(P, B.CreateIntToPtr(N, Host), Ptr);
+            } else {
+                Value *ForGame = B.CreateIntToPtr(B.CreateSelect(P, N, ConstantInt::get(I64, 0)), Host);
+                Value *Off = B.CreatePtrToInt(game(B, ForGame), I32);
+                R = B.CreateSelect(P, B.CreateZExtOrTrunc(Off, FT->getReturnType()), B.CreateTrunc(N, FT->getReturnType()));
+            }
+        }
+        CI->replaceAllUsesWith(R);
+        CI->eraseFromParent();
+    }
     void writeDefs() {
         std::error_code ec;
         raw_fd_ostream out(Defs, ec);
         for (Function &F : M) {
             if (!F.isDeclaration() && !F.hasLocalLinkage()) {
-                out << F.getName() << " " << kinds(F.getFunctionType()) << "\n";
+                out << F.getName() << " " << kinds(F.getFunctionType());
+                if (Elf && Native && (floatingABI(F.getFunctionType()) || F.isVarArg())) out << "|native-fp";
+                out << "\n";
             }
         }
     }
@@ -601,7 +851,13 @@ struct Window {
             GlobalVariable *g = M.getGlobalVariable(a.substr(0, eq), true);
             if (g && g->isDeclaration()) {
                 uint64_t addr = std::stoull(a.substr(eq + 1), nullptr, 0);
-                g->replaceAllUsesWith(ConstantExpr::getGetElementPtr(I8, window(), ConstantInt::get(I64, addr)));
+                // ELF chooses W before pointer constructors, independently of
+                // the image. Keep absolute PS2 symbols in guest space until
+                // lowerConstant materializes the runtime Port_Window load.
+                Constant *p = Elf ? ConstantExpr::getAddrSpaceCast(
+                    ConstantExpr::getIntToPtr(ConstantInt::get(I32, addr), Game), Host)
+                    : ConstantExpr::getGetElementPtr(I8, window(), ConstantInt::get(I64, addr));
+                g->replaceAllUsesWith(p);
                 g->eraseFromParent();
             }
         }
@@ -650,7 +906,9 @@ struct Window {
                 fixCall(CI);
             }
         }
+        if (Elf) elfInitializers();
         for (GlobalVariable &G : M.globals()) {
+            if (Elf) break;
             if (G.hasInitializer()) {
                 Constant *f = fixC(G.getInitializer());
                 if (f != G.getInitializer()) {
@@ -669,14 +927,16 @@ struct Window {
             (*buf)->getBuffer().split(lines, '\n', -1, false);
             for (StringRef l : lines) {
                 auto [name, k] = l.split(' ');
-                db[name.str()] = k.str();
+                auto [signature, mode] = k.split('|');
+                db[name.str()] = signature.str();
+                if (mode == "native-fp") NativeFloat.insert(name.str());
             }
         }
         for (Function &F : M) {
-            if (F.isDeclaration()) {
+            if (F.isDeclaration() || NativeThunks.count(&F)) {
                 continue;
             }
-            fixCalledThroughPointer(F);
+            if (!Elf) fixCalledThroughPointer(F);
             fixFunction(F);
             {
                 std::vector<CallInst *> calls;
@@ -686,7 +946,7 @@ struct Window {
                     }
                 }
                 for (CallInst *CI : calls) {
-                    fixIndirectResult(CI);
+                    if (Elf) elfIndirect(CI); else fixIndirectResult(CI);
                 }
             }
             if (!db.empty()) {
@@ -700,13 +960,21 @@ struct Window {
                     fixAcross(CI, db);
                 }
             }
+            if (Elf && !Native) {
+                std::vector<CallInst *> calls;
+                for (Instruction &I : instructions(F)) if (auto *CI = dyn_cast<CallInst>(&I)) calls.push_back(CI);
+                for (CallInst *CI : calls) bridgeNativeFloat(CI, db);
+            }
             check(F);
             if (Report) {
                 report(F);
             }
-            F.removeFnAttr("target-cpu");
-            F.addFnAttr("target-features", "-fp-armv8,-neon");
+            if (M.getTargetTriple().isAArch64() && !Native) {
+                F.removeFnAttr("target-cpu");
+                F.addFnAttr("target-features", "-fp-armv8,-neon");
+            }
         }
+        if (Elf) elfSignatures();
         return !Failed;
     }
 };

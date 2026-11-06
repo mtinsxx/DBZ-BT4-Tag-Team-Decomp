@@ -1,7 +1,9 @@
 # Android native port — engineering status
 
-This directory is the beginning of a **real native ARM64 port**, not a
-standalone Android game and not a simulated launcher.
+This directory contains the **native ARM64 engine port**. The complete strict
+link now passes; the wrapper builds an experimental SDL3 Android APK. The
+owner validated ENG/SAF and reached the memory gate. Game_Main execution,
+graphics and gameplay have not been established.
 
 ## Completed in this stage
 - Added a thread-safe, complete-snapshot touchscreen-to-libpad2 bridge.
@@ -13,17 +15,50 @@ standalone Android game and not a simulated launcher.
 - Added guarded 32-bit guest <-> 64-bit host address conversion with range checks.
 - Added a non-destructive mmap helper: MAP_FIXED_NOREPLACE, verifying exact placement and handling host page-size alignment.
 - Added unit tests for conversion, unmapped-range rejection, and safe collision failure.
+- Added opt-in ELF lowering to the existing LLVM window pass, with runtime
+  initializers for compact pointers and checked host-to-guest conversions.
+- Added callback signature registration/adaptation without a 4 GiB alignment
+  assumption, plus direct cross-translation-unit signature reconciliation.
+- Compiled all 274 original game C translation units to ARM64 objects.
+- Strictly linked an explicitly labelled subset containing the original
+  alignment and intrusive-list implementations (not the complete game).
+- Compiled all 136 runtime/vendor/Android translation units, including the
+  existing GS/VU1, SDL GPU/Vulkan, audio, menu and network sources.
+- Removed assembly-table ABS32 relocations with checked startup fixups;
+  direct native/software-float boundaries have integer-bit adapters.
+- Implemented real ISO9660 metadata lookup for `sceCdSearchFile`, verified
+  with synthetic data. No commercial ISO or assets are included.
 
-## Not completed / not claimed
-- Android runtime and shared-library link of the game's original code.
-- 32-bit PS2 pointer address translation on Android ARM64.
-- Vulkan swapchain and Android SDL3 platform integration.
-- Android Activity, touch event UI, JNI calls, ISO preparation.
-- APK packaging, gameplay validation or performance measurements.
+## Current integration and limits
+- All 102 SDK baseline entries resolved (101 functions + one verified scalar).
+- Complete `libtenkaichi_mobile.so` linked with `--no-undefined`, not a subset.
+- Explicit Android mappings, checked skeleton-data import and guest-stack entry.
+- SDL3 Activity/JNI and the existing Vulkan GS/VU1 renderer connected in the wrapper.
+- Experimental APK assembled, signed and verified by pinned SDK tools.
+- Profile selection uses verified main-program size/CRC rather than desktop markers.
+- Persistent SAF descriptor feeds bounded ISO/AFS file streams without private copies.
+- The supplied phone run stopped before guest memory was ready; game entry,
+  presentation, movies, controls and performance need owner testing. Touch UI, state-list integration and hardware validation are
+  not complete. The six IPU parsers are not a complete new MPEG-2 video decoder.
+
+See [SDK_RECONSTRUCTION.md](SDK_RECONSTRUCTION.md) and [ANDROID_BOOT.md](ANDROID_BOOT.md).
+
+The Galaxy validated ENG/SAF and stopped at guest memory. The architecture audit
+replaces the fixed image/window relationship with checked constructor-time
+selection, replaces manual SP switching with a registered pthread/JNI stack,
+and explicitly activates GS=gpu/Vulkan. Read the full
+[architecture audit](ARCHITECTURE_AUDIT.md), including the unchanged importer,
+actual execution checkpoints and the limits of host/CI verification.
 
 ## Address-window module
 
-The new `android/include/bt4_address_window.h` + `android/src/bt4_address_window.c` implement independently verifiable conversion and memory-mapping primitives. They are wired into port-level address conversions and guest region mappings, but **not yet into all game-code pointer operations**. Cross compiling these functions does not imply the game executes on ARM64. On Android, the LLVM pass and the ASLR-safe library placement must agree on the same runtime guest base. Never fall back to `MAP_FIXED`, low-address assumptions, or disabling ASLR.
+`android/include/bt4_address_window.h` + `android/src/bt4_address_window.c`
+implement conversion and safe memory-mapping primitives. The separate
+`build_game.py` pipeline now applies LLVM guest-pointer lowering to the
+original game code. The foundation CMake libraries alone do not run that
+pipeline. Cross compilation does not imply execution on ARM64: the loaded
+image, data fixups, ABI and guest stack must agree on one window. Never fall
+back to `MAP_FIXED`, low-address assumptions or disabling ASLR.
 
 ## Engine memory integration (Android only)
 
@@ -41,13 +76,19 @@ The new `android/include/bt4_address_window.h` + `android/src/bt4_address_window
   address layout; this is a runtime constraint and must be diagnosed using
   real device logs, not bypassed with `MAP_FIXED`.
 
-## Architecture constraint to resolve next
+## Compiler and runtime work
 
-The game retains PS2-sized 32-bit pointers. Existing Linux/Windows builds
-require address ranges below 4 GB; macOS ARM64 uses a custom relocated
-window and LLVM address-transform pass. An Android shared library loaded
-under PIE/ASLR **cannot assume** either desktop memory layout. Solve
-this before claiming a native game build.
+The ELF mode (`-bt3-elf`) of the shared LLVM pass now lowers guest memory
+operations and compact pointer initializers without absolute 32-bit ELF
+relocations. Checked conversions use the ASLR-selected `Port_Window`;
+indirect-call adaptation uses registered callee signatures, rather than the
+low bits of a host pointer. Tests execute transformed code and the original
+list implementation on the host at multiple ASLR bases and emit ARM64
+objects. This is still not proof that the complete runtime ABI, floating-point
+boundaries, guest stack or data loading are correct on Android.
+
+See [build pipeline and remaining integration](BUILD.md) for reproducible
+commands. No compiler is embedded in an Android application.
 
 See `port/src/port_addr.h`, `port/src/plat_mem.c`,
 `port/tools/ptr32.py` and `port/tools/macwin/`.
@@ -73,3 +114,12 @@ cmake --build build/android-arm64 --parallel
 The workflow also runs these checks. Only the user can test actual
 gameplay, visuals, controls and performance on their device. Static
 checks and successful builds must never be presented as proof of gameplay.
+
+## SDK investigation
+
+The full ARM64 link has advanced from 102 to **6** SDK/CRI targets. See
+[SDK_RECONSTRUCTION.md](SDK_RECONSTRUCTION.md) for the verified native methods,
+compact stream layouts, tests and scalar correction. See
+[SDK_INVESTIGATION.md](SDK_INVESTIGATION.md) for the 15-table audit, strict-link
+comparison tool and private R5900 evidence generation from the owner's ELF/ISO.
+This is separate from the passing foundation/module builds above.

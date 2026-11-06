@@ -15,6 +15,7 @@
 #include "port_addr.h"
 #ifdef __ANDROID__
 #include "../../android/include/bt4_address_window.h"
+#include "../../android/include/bt4_guest_memory.h"
 #endif
 #include <stdint.h>
 #include <stdio.h>
@@ -627,6 +628,7 @@ void Port_HeapRegion(uint8_t **base, uint32_t *size) {
 #if PORT_LOW_REGION
 static void low_region_take(void);
 #endif
+#ifndef __ANDROID__
 __attribute__((constructor)) static void Port_MapMemory(void) {
 #ifdef _WIN32
     /* The program only works at the address it was linked for (the game's pointers are 4 bytes and absolute). It
@@ -674,6 +676,38 @@ __attribute__((constructor)) static void Port_MapMemory(void) {
     map(0x70000000u, 0x4000, "the scratchpad");
     gPortStage = "memory ready, before the program's main";
 }
+#endif
+
+#ifdef __ANDROID__
+/* Commit the early PROT_NONE reservations after validated user data is ready.
+   dlopen imports no game data. Only owned reservations can become writable;
+   mappings owned by Android/other libraries are never replaced. */
+int Port_AndroidMemoryPrepare(void) {
+    _Static_assert(HEAP_BASE==BT4_GUEST_HEAP_BASE && HEAP_END==BT4_GUEST_HEAP_END,"heap layout unchanged");
+    _Static_assert(STACK_BASE==BT4_GUEST_STACK_BASE && STACK_SIZE==BT4_GUEST_STACK_SIZE,"stack layout unchanged");
+    _Static_assert(LOW_ARENA_BASE==BT4_GUEST_LOW_BASE && LOW_ARENA_SIZE==BT4_GUEST_LOW_SIZE,"arena layout unchanged");
+    if(sLowArena!=NULL)return 0;
+    gPortStage="Android: committing reserved guest memory";
+    if(Bt4Android_MemoryCommit()!=0) {
+        gPortStage="Android: guest memory initialization failed (see guestmem report)";return -1;
+    }
+    sLowArena=Bt4Android_MemoryHost(LOW_ARENA_BASE);
+    if(!sLowArena) {
+        fprintf(stderr,"guestmem phase=allocator-bind missing committed arena guest=0x%08x\n",LOW_ARENA_BASE);return -1;
+    }
+    sLowNext=sLowArena;
+    gPortStage = "Android: guest memory ready; data not imported";
+    return 0;
+}
+void Port_AndroidSetGameStackTop(void *top) { sGameStackTop=top; }
+int Port_AndroidRunGame(void) {
+    extern int Bt4Android_RunGameThread(void *,size_t);
+    void *stack=Bt4Android_MemoryHost(BT4_GUEST_STACK_BASE);
+    if(sLowArena==NULL || !stack)return 2;
+    gPortStage="Android: creating registered native game thread";
+    return Bt4Android_RunGameThread(stack,BT4_GUEST_STACK_SIZE);
+}
+#endif
 
 /* The game's malloc (include/port_compat.h renames it): a bump allocator over the heap region, 16-byte aligned. */
 void *Port_Malloc(uint32_t size) {
@@ -707,22 +741,10 @@ static void low_region_take(void) {
         }
         sLowCommitted = sLowArena;
 #elif defined(__ANDROID__)
-        {
-            Bt4AddressWindow window;
-            void *region = NULL;
-            int result;
-            if (Bt4Android_WindowConfigure() != 0 ||
-                Bt4Addr_Init(&window, PORT_WINDOW) != BT4_ADDR_OK) {
-                fprintf(stderr, "bt4 android: no guest address window for low allocation\n");
-                exit(2);
-            }
-            result = Bt4Addr_MapWritable(&window, LOW_ARENA_BASE, LOW_ARENA_SIZE, &region);
-            if (result != BT4_ADDR_OK) {
-                fprintf(stderr, "bt4 android: cannot reserve guest arena at +0x%08X (error %d)\n",
-                        LOW_ARENA_BASE, result);
-                exit(2);
-            }
-            sLowArena = (uint8_t *)region;
+        /* The range is already owned by the early reservation. Never attempt
+           a second mmap over it, and never publish an uncommitted arena. */
+        if(Port_AndroidMemoryPrepare()!=0) {
+            fprintf(stderr,"guestmem: allocator requested before successful memory initialization\n");exit(2);
         }
 #elif defined(__APPLE__)
         sLowArena = map_at(LOW_ARENA_BASE, LOW_ARENA_SIZE); /* (pages are only taken as they are first used) */

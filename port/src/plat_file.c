@@ -14,6 +14,7 @@
 #include <string.h>
 #include "plat_stages.h"
 #include "plat_songs.h"
+#include "port_read_file.h"
 
 #define SECTOR 2048
 enum { STAT_STOP = 1, STAT_READING = 2, STAT_READEND = 3, STAT_ERROR = 4 };
@@ -132,6 +133,14 @@ int Port_FilePath(int ptid, int flid, const char *fname, char *out, int size) {
     snprintf(out, (size_t)size, "%s/mods/%s", root(), rel);
     fp = fopen(out, "rb");
     if (fp == NULL) {
+#ifdef __ANDROID__
+        if(Bt4Iso_IsMounted()) {
+            fp=Bt4Iso_OpenFile(rel);
+            if(!fp)return 0;
+            fclose(fp);
+            return snprintf(out,(size_t)size,"iso://%s",rel)<size;
+        }
+#endif
         snprintf(out, (size_t)size, "%s/%s", root(), rel);
         fp = fopen(out, "rb");
     }

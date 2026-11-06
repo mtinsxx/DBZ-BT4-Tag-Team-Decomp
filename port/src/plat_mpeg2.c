@@ -1,3 +1,4 @@
+#include "port_read_file.h"
 /*
  * The decoder for the game's two movies (DATA/ZS3USOP.PSS, the opening, and ZS3USED.PSS, the ending).
  *
@@ -23,6 +24,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "port_mpeg_quant.h"
 
 typedef struct Mpeg2 {
     FILE *fp;
@@ -55,6 +57,15 @@ static const uint8_t kDefaultIntra[64] = { /* raster order */
     8, 16, 19, 22, 26, 27, 29, 34, 16, 16, 22, 24, 27, 29, 34, 37, 19, 22, 26, 27, 29, 34, 34, 38, 22, 22, 26, 27, 29, 34, 37, 40,
     22, 26, 27, 29, 32, 35, 40, 48, 26, 27, 29, 32, 35, 40, 48, 58, 26, 27, 29, 34, 38, 46, 56, 69, 27, 29, 35, 38, 46, 56, 69, 83};
 static const uint8_t kNonLinearScale[32] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 10, 12, 14, 16, 18, 20, 22, 24, 28, 32, 36, 40, 44, 48, 52, 56, 64, 72, 80, 88, 96, 104, 112};
+
+void Port_MpegQuantDefaults(uint8_t intra[64], uint8_t non_intra[64]) {
+    unsigned i;
+    for (i = 0; i < 64; ++i) { intra[i] = kDefaultIntra[kZigzag[i]]; non_intra[i] = 16; }
+}
+void Port_MpegQuantRaster(const uint8_t wire[64], uint8_t raster[64]) {
+    unsigned i;
+    for (i = 0; i < 64; ++i) raster[kZigzag[i]] = wire[i];
+}
 
 /* DCT coefficients: code (without the sign bit), run, level. Table B-14 and the codes of table B-15 that differ;
    run 64 = end of block, run 65 = escape. */
@@ -543,7 +554,7 @@ static long find_picture(const Mpeg2 *m, size_t from) {
 
 Mpeg2 *Mpeg2_Open(const char *path) {
     Mpeg2 *m;
-    FILE *fp = fopen(path, "rb");
+    FILE *fp = Port_ReadFile(path);
 
     if (fp == NULL) {
         return NULL;
