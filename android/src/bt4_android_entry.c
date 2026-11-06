@@ -11,6 +11,7 @@
 extern void Game_Main(void);
 extern void Port_GameProfileInit(void);
 extern int Port_BuildIdentity(unsigned long long *);
+extern void Port_BuildIdentityResetForSetup(void);
 extern const char *Port_BuildIdentitySummary(void);
 PORT_HOST static int started;
 
@@ -49,7 +50,6 @@ __attribute__((visibility("default"))) int SDL_main(int argc,char **argv) {
     void *elf=NULL,*overlay=NULL;size_t elf_size=0,overlay_size=0;
     int status=2;
     if (argc!=2 || !argv[1] || started) return 2;
-    started=1;
     if (chdir(argv[1])) return 2;
     (void)freopen("tenkaichi-native.log","w",stderr);
     SDL_SetLogOutputFunction(log_output,NULL);
@@ -59,6 +59,7 @@ __attribute__((visibility("default"))) int SDL_main(int argc,char **argv) {
         return 2;
     }
     Port_GameProfileInit();
+    Port_BuildIdentityResetForSetup();
     const char *root=getenv("BT3_DATA");
     if (!root || Port_BuildIdentity(NULL)!=1) {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,"Engine not started: %s",Port_BuildIdentitySummary());
@@ -75,6 +76,7 @@ __attribute__((visibility("default"))) int SDL_main(int argc,char **argv) {
     }
     free(elf);free(overlay);
     if (status) return 2;
+    started=1;
     return Port_AndroidRunGame();
 }
 #endif

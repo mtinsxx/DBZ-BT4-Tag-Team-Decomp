@@ -29,6 +29,11 @@ extern FILE *Port_FileOpenHost(const char *,char *,size_t);
 static int sChecked,sCompatible;
 static char sReason[192];
 static unsigned sCrcTable[256];
+#ifdef __ANDROID__
+/* Setup can import a corrected disc after a failed launch. Only call while
+   the game is not running; gameplay keeps the normal immutable identity. */
+void Port_BuildIdentityResetForSetup(void){sChecked=0;sCompatible=0;sReason[0]=0;}
+#endif
 const char *Port_BuildIdentitySummary(void){return sReason;}
 int Port_BuildIdentity(unsigned long long *out){
     unsigned char buffer[65536];char path[2048];size_t i,n;unsigned bytes=0;

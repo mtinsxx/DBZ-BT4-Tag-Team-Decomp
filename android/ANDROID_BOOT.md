@@ -11,7 +11,9 @@ the data/content roots, selects the strict existing Vulkan backend, identifies
 the English/Spanish profile, and verifies all three base programs using the
 existing size/CRC identity check: `SLUS_219.78`, `BIN/DBZP.BIN`, `BIN/DBZ4.BIN`.
 Failures stop startup and produce `tenkaichi-native.log`; no synthetic frame is
-presented. The main ELF supplied during reconstruction alone is insufficient.
+presented. Failed setup attempts do not latch the started flag or the identity
+cache; a corrected import can be retried before the game starts. The main ELF
+supplied during reconstruction alone is insufficient.
 
 `Port_AndroidMemoryPrepare` reserves heap, guest stack, compact allocator arena,
 registers and scratchpad with checked `MAP_FIXED_NOREPLACE` mappings. A failed
