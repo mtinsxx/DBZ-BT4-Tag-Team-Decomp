@@ -742,6 +742,11 @@ static void init_failed(void) {
 }
 
 static int gpu_init(const char *driver) {
+#ifdef __ANDROID__
+    extern const char *volatile gPortStage;
+    gPortStage="Android: creating SDL Vulkan device";
+    fprintf(stderr,"boot graphics: requesting backend=%s\n",driver);
+#endif
     SDL_GPUBufferCreateInfo bi;
     SDL_GPUTransferBufferCreateInfo ti;
     static uint32_t white = 0xFFFFFFFFu;
@@ -760,6 +765,10 @@ static int gpu_init(const char *driver) {
         fprintf(stderr, "bt3: %s device: %s\n", driver, SDL_GetError());
         return 0;
     }
+#ifdef __ANDROID__
+    gPortStage="Android: Vulkan device created, creating window";
+    fprintf(stderr,"boot graphics: actual device driver=%s\n",SDL_GetGPUDeviceDriver(sDev));
+#endif
     sShadowStencil = sDev != NULL && SDL_GPUTextureSupportsFormat(sDev, SDL_GPU_TEXTUREFORMAT_D32_FLOAT_S8_UINT,
         SDL_GPU_TEXTURETYPE_2D, SDL_GPU_TEXTUREUSAGE_DEPTH_STENCIL_TARGET | SDL_GPU_TEXTUREUSAGE_SAMPLER);
     sDepthFormat = sShadowStencil ? SDL_GPU_TEXTUREFORMAT_D32_FLOAT_S8_UINT : SDL_GPU_TEXTUREFORMAT_D32_FLOAT;
@@ -771,6 +780,10 @@ static int gpu_init(const char *driver) {
         fprintf(stderr, "bt3: no GPU window: %s\n", SDL_GetError());
         goto fail;
     }
+#ifdef __ANDROID__
+    gPortStage="Android: Vulkan window claimed, creating pipelines";
+    fprintf(stderr,"boot graphics: SDL Android window claimed by GPU device\n");
+#endif
     /* The game paces itself at 30 frames per second; waiting for the display's own refresh on top of that
        (VSYNC) costs up to a refresh period per frame. Prefer MAILBOX (no tearing, no wait), then IMMEDIATE. */
     vsync_apply(Port_Setting("vsync", 0)); /* (the setting "V-sync" asks for the wait all the same) */

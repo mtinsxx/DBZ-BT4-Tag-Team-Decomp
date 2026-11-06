@@ -2,6 +2,7 @@
 #define _POSIX_C_SOURCE 200809L
 #endif
 #include "bt4_iso9660.h"
+#include "bt4_iso_source.h"
 #include <sys/types.h>
 #include <ctype.h>
 #include <stdlib.h>
@@ -138,11 +139,10 @@ int Bt4Iso_Find(FILE *iso, const char *path, Bt4IsoFile *file) {
  * fabricated disc-present result. The application supplies its retained ISO
  * path only after validating the compatible BT4 profile. */
 int sceCdSearchFile(void *out, char *name) {
-    const char *path = getenv("BT4_ISO");
     FILE *iso;
     Bt4IsoFile file;
     int result;
-    if (!out || !path || !*path || !(iso = fopen(path, "rb"))) return 0;
+    if (!out || !(iso = Bt4Iso_Open())) return 0;
     result = Bt4Iso_Find(iso, name, &file);
     fclose(iso);
     if (result != 1) return 0;

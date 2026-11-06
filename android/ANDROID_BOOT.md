@@ -1,59 +1,74 @@
-# Explicit Android engine startup
+# Explicit Android engine startup — SAF revision
 
-`bt4_android_entry.c` exports the real `SDL_main`, called by upstream SDL3 JNI
-from the wrapper's SDLActivity. `dlopen` initializes the guest address window,
-ABI metadata and compact table relocations, but no longer reads `/proc/self/exe.dat`
-or reserves game memory through the desktop `Port_MapMemory` constructor.
-Desktop startup retains that constructor unchanged.
+The first Galaxy test reached profile verification, then returned before
+`Game_Main`: the desktop marker-based selector defaulted to Spanish without
+installer metadata, rejecting the 2,115,696-byte English executable against the
+2,115,688-byte Spanish expectation. The supplied private main was checked with
+the actual new C verifier: size 2115696, CRC32 9d2224c1, English. Runtime profile
+selection now uses `bt4_base_profile.c` and the existing size/CRC catalogue.
+Checks of all three base programs remain mandatory. Unknown fingerprints stop
+Android startup before the legacy desktop marker fallback.
 
-The Android entry receives the application's private files directory. It sets
-the data/content roots, selects the strict existing Vulkan backend, identifies
-the English/Spanish profile, and verifies all three base programs using the
-existing size/CRC identity check: `SLUS_219.78`, `BIN/DBZP.BIN`, `BIN/DBZ4.BIN`.
-Failures stop startup and produce `tenkaichi-native.log`; no synthetic frame is
-presented. Failed setup attempts do not latch the started flag or the identity
-cache; a corrected import can be retried before the game starts. The main ELF
-supplied during reconstruction alone is insufficient.
+`MainActivity.nativeSetIso` receives the selected document's fd, start offset
+and declared length from `AssetFileDescriptor`. `Bt4Iso_MountFd` validates random
+access and duplicates the descriptor; Java closes its borrowed fd afterward.
+The app persists the SAF read grant and URI, never an assumed `_data` path.
+Nonseekable providers fail explicitly; there is no whole-ISO copy fallback.
+Setup can verify the source without entering gameplay, allowing cleanup of old
+imports even when subsequent engine initialization fails. Cleanup revalidates
+the source before removing only the old private import destinations.
 
-Native DVD methods need the original sector layout and padding. Setup also
-imports the owner's ISO as private `disc.iso`, bound through `BT4_ISO`. Before
-any memory/data initialization, the three ISO program extents are compared
-byte-for-byte with the independently profile-verified extracted programs.
-A missing, malformed or mismatched ISO stops startup. Synthetic ISO tests
-exercise equality, differences, size/missing-file rejection, invalid extents
-and real sparse-file comparisons beyond 6 GiB. No sectors or LSNs are invented.
+The native source creates independent, bounded stdio views using `pread`:
+Android funopen / host fopencookie. Raw ISO views serve ISO9660 and actual DVD
+sector reads, preserving real LSNs/padding. `disc/...` resolves ISO files, and
+`pzs4usN/NNNNN.bin` resolves a bounded member of `DATA/PZS4USN.AFS`. Empty members
+are valid; corrupt offsets/counts or truncated backing data fail. Neither ISO
+nor AFS content is extracted to disk. The existing file cache retains 32 open
+entries in RAM. Descriptor/lock state is `.porthst`, not guest snapshot state.
 
-`Port_AndroidMemoryPrepare` reserves heap, guest stack, compact allocator arena,
-registers and scratchpad with checked `MAP_FIXED_NOREPLACE` mappings. A failed
-reservation rolls back this attempt's earlier mappings, rounded to the host
-page size. Existing mappings are never replaced. No game thread is started yet.
+`Port_FileOpenHost` preserves mods/aliases, then reads the selected ISO instead
+of stale private base copies. Media and HUD portrait readers use `Port_ReadFile`
+for internal `iso://` paths; normal desktop/mod paths retain standard fopen.
+The JNI preflight checks the canonical three programs; the existing runtime
+identity verifier also checks what its actual provider resolves, including any
+base-program overrides, with observed/expected size and CRC in diagnostics.
 
-`elf_data.import_table` derives 2,388 import spans from the existing legal
-`port/data/index.txt` and `.space` directives. Native destination labels follow
-the PIE library's actual load bias; `.zero` and symbolic `.long` slots are not
-imported. No disc is needed to compile this metadata and no game values are
-included. The shared-library `.porthst` descriptors contain native addresses
-and stay outside guest snapshots. Unsupported layout directives fail the build.
+`SDL_main` receives the private files directory, sets content roots and the
+strict existing Vulkan backend, and logs the detected profile. Only supported
+program data reaches initialization. `dlopen` configures the guest window, ABI
+metadata and compact table relocations, but does not reserve guest memory or
+read the desktop `/proc/self/exe.dat`. Desktop keeps its existing constructor.
 
-`Bt4Android_ImportPrograms` validates the main ELF32 little-endian MIPS section
-table and file ranges, constructs the original main image, checks every import
-range and computes the existing ordered FNV checksum before changing any
-destination. A checksum difference is accepted only when the caller has already
-verified the complete supported base-program profile, as in desktop startup.
-Tests cover truncated sections, overflow, byte order, missing/invalid data,
-checksum rejection without partial writes, and preservation of pointer slots.
+`Port_AndroidMemoryPrepare` reserves heap, guest stack, compact arena, registers
+and scratchpad through checked `MAP_FIXED_NOREPLACE`. Collisions roll back this
+attempt's mappings, rounded to the host page size, without replacing mappings.
+`elf_data.import_table` still derives 2,388 legal import spans from skeleton
+metadata; pointer slots and zeros stay intact. The validated main/overlay are
+read from the selected ISO into temporary RAM. `Bt4Android_ImportPrograms`
+checks ELF32 MIPS ranges and all source spans before writing destinations. The
+existing alternate-profile checksum rule remains gated on full base-program
+verification; no integrity check is disabled.
 
-Only after the import succeeds does `Port_AndroidRunGame` call the real
-`Game_Main` on the reserved 16 MiB guest stack. The AAPCS64 trampoline preserves
-callee-saved registers and the original SDL stack, leaves Android's reserved
-x18 untouched, and restores the SDL stack if the game returns. SDLActivity
-supplies Surface/audio/input/lifecycle JNI. The existing GS/VU1 renderer creates
-the SDL GPU Vulkan device/window and presents the game's frames; no replacement
-render loop or demo scene was added.
+After import, `Port_AndroidRunGame` calls real `Game_Main` on the 16 MiB guest
+stack. The AAPCS64 trampoline preserves the SDL stack and reserved Android x18.
+SDLActivity supplies JNI/Surface/audio/input/lifecycle; the existing GS/VU1 SDL
+GPU Vulkan renderer supplies game frames. New diagnostics mark actual device
+creation and window claiming; no substitute scene is rendered.
 
-This path compiles and links but has **not executed on ARM64 hardware** here.
-The owner must validate load bias/mappings, stack entry, asset import, startup,
-Vulkan presentation and lifecycle on the Galaxy S24 FE. Android snapshot lists,
-touchscreen UI and complete movie playback remain separate work. The six CRI
-extension parsers preserve their original object contracts; the existing movie
-path remains distinct and its software decoder is I-picture limited.
+The Android process retains bionic/debuggerd's crash handler, rather than the
+desktop handler which reset signals to SIG_DFL. The wrapper exports native/Java
+logs, APK commits, device data and its own ApplicationExitInfo records/traces
+when Android supplies them (native tombstones on supported system versions).
+Missing traces are reported, not invented. No device trace has been supplied
+past the old profile gate; this revised boot path remains untested on hardware.
+
+Validation: 15 host CTest cases, 10 SDK/profile/ISO sanitizer groups and 81
+desktop tests pass. Synthetic tests cover exact ENG/ESP catalogue entries,
+corruption, AFS boundaries/empty files, raw-source lifetime, nonzero offsets,
+pipes, truncation, cache/media integration and sparse reads beyond 6 GiB.
+The wrapper's Java test removes a 12 GiB sparse private import while preserving
+external ISO/saves/mods/settings and rejecting symlink escape. ARM64 full links
+have 274 game / 134 runtime units and zero SDK/ABS32 blockers. Only the owner
+can establish actual Galaxy boot, Vulkan presentation and gameplay; complete
+private game data/device access is unavailable here. Android state-list, modern
+touch UI and complete MPEG movie decoding remain separate pending work.

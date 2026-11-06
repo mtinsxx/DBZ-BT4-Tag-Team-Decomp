@@ -1,3 +1,4 @@
+#include "../port_read_file.h"
 /*
  * The streams that are not the game's own ADX: a song or a sound mod from outside the disc, in mp3, wav or flac,
  * decoded and played as it is by miniaudio (port/third_party/miniaudio) instead of being converted to ADX first.
@@ -141,7 +142,7 @@ static int ends_in(const char *path, const char *ext) {
 
 /* The first bytes of a file, or 0 when it cannot be read: enough for the container's mark. */
 static int magic(const char *path, uint8_t *out, size_t n) {
-    FILE *fp = fopen(path, "rb");
+    FILE *fp = Port_ReadFile(path);
     size_t got;
 
     if (fp == NULL) {

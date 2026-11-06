@@ -21,7 +21,7 @@ on-device boot, graphics or gameplay has been established.
 - Compiled all 274 original game C translation units to ARM64 objects.
 - Strictly linked an explicitly labelled subset containing the original
   alignment and intrusive-list implementations (not the complete game).
-- Compiled all 132 runtime/vendor/Android translation units, including the
+- Compiled all 134 runtime/vendor/Android translation units, including the
   existing GS/VU1, SDL GPU/Vulkan, audio, menu and network sources.
 - Removed assembly-table ABS32 relocations with checked startup fixups;
   direct native/software-float boundaries have integer-bit adapters.
@@ -34,8 +34,10 @@ on-device boot, graphics or gameplay has been established.
 - Explicit Android mappings, checked skeleton-data import and guest-stack entry.
 - SDL3 Activity/JNI and the existing Vulkan GS/VU1 renderer connected in the wrapper.
 - Experimental APK assembled, signed and verified by pinned SDK tools.
+- Profile selection uses verified main-program size/CRC rather than desktop markers.
+- Persistent SAF descriptor feeds bounded ISO/AFS file streams without private copies.
 - No phone execution: boot, presentation, movies, controls and performance need
-  owner testing. Touch UI, state-list integration and direct ISO extraction are
+  owner testing. Touch UI, state-list integration and hardware validation are
   not complete. The six IPU parsers are not a complete new MPEG-2 video decoder.
 
 See [SDK_RECONSTRUCTION.md](SDK_RECONSTRUCTION.md) and [ANDROID_BOOT.md](ANDROID_BOOT.md).

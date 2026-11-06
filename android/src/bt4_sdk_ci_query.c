@@ -1,3 +1,4 @@
+#include "bt4_iso_source.h"
 /* Recovered DVD/host metadata and extended-command contracts. Native reads
    reuse the existing ISO metadata reader and extracted-file cache. */
 #include "bt4_sdk_ci_query.h"
@@ -86,7 +87,6 @@ static int host_path(const char *name, char *out, size_t capacity) {
 int Bt4Ci_DvdLocate(const char *name, Bt4IsoFile *file, int *overridden) {
     uint32_t result[2];
     char path[1024], *relative;
-    const char *iso_path;
     FILE *iso;
     Bt4IsoFile info;
     int found;
@@ -102,8 +102,7 @@ int Bt4Ci_DvdLocate(const char *name, Bt4IsoFile *file, int *overridden) {
     if (overridden) *overridden=0;
     if (!dvd_path(name,path,sizeof(path))) return 0;
     relative=strchr(path,':'); relative=relative ? relative+1 : path;
-    iso_path=getenv("BT4_ISO");
-    if (!iso_path || !(iso=fopen(iso_path,"rb"))) return 0;
+    if (!(iso=Bt4Iso_Open())) return 0;
     found=Bt4Iso_Find(iso,relative,&info);
     fclose(iso);
     if (found!=1) return 0;

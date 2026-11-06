@@ -1,3 +1,4 @@
+#include "port_read_file.h"
 /*
  * The decoder for the game's two movies (DATA/ZS3USOP.PSS, the opening, and ZS3USED.PSS, the ending).
  *
@@ -553,7 +554,7 @@ static long find_picture(const Mpeg2 *m, size_t from) {
 
 Mpeg2 *Mpeg2_Open(const char *path) {
     Mpeg2 *m;
-    FILE *fp = fopen(path, "rb");
+    FILE *fp = Port_ReadFile(path);
 
     if (fp == NULL) {
         return NULL;

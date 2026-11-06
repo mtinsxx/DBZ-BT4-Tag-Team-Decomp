@@ -13,6 +13,9 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#if defined(__ANDROID__) || defined(BT4_ANDROID_ABI_TEST)
+#include "../../android/include/bt4_iso_source.h"
+#endif
 extern void Port_StateTouch(void *p, unsigned long n); /* gs/state.c */
 
 extern const char *Port_FileRoot(void); /* plat_file.c: BT3_DATA or "gamedata" */
@@ -50,6 +53,12 @@ FILE *Port_FileOpenHost(const char *rel, char *path, size_t n) {
         fp = fopen(path, "rb");
     }
     if (fp == NULL) {
+#if defined(__ANDROID__) || defined(BT4_ANDROID_ABI_TEST)
+        if(Bt4Iso_IsMounted()) {
+            snprintf(path,n,"iso://%s",rel);
+            return Bt4Iso_OpenFile(rel);
+        }
+#endif
         snprintf(path, n, "%s/%s", Port_FileRoot(), rel);
         fp = fopen(path, "rb");
     }

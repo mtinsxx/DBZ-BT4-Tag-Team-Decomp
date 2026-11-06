@@ -279,6 +279,9 @@ static void on_crash_info(int sig, siginfo_t *si, void *ctx) {
 }
 #endif
 
+#ifndef __ANDROID__
+/* Android keeps bionic/debuggerd's signal handler and tombstones. Replacing it
+   with the desktop handler then raising SIG_DFL suppresses system traces. */
 __attribute__((constructor)) static void crash_init(void) {
     static const int sigs[] = {SIGSEGV, SIGFPE, SIGILL, SIGBUS, SIGABRT};
     unsigned i;
@@ -295,4 +298,5 @@ __attribute__((constructor)) static void crash_init(void) {
 #endif
     }
 }
+#endif
 #endif

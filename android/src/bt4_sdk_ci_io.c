@@ -1,3 +1,4 @@
+#include "bt4_iso_source.h"
 #define _POSIX_C_SOURCE 200809L
 #include "bt4_sdk_ci_io.h"
 #include "bt4_sdk_ci_query.h"
@@ -85,14 +86,13 @@ static int server_enter(uint32_t *guard) {
     *guard=1;return 1;
 }
 static int read_dvd(Bt4CiRequest *r) {
-    const char *path=getenv("BT4_ISO");
     FILE *iso;
     uint64_t offset=(uint64_t)r->lsn*2048,bytes=(uint64_t)r->sectors*2048;
     int result;
     if (((r->mode>>16)&255)!=0) { errno=ENOTSUP;return 0; } /* ISO has 2048-byte sectors */
     if (bytes>SIZE_MAX || bytes>UINT64_C(0x100000000)-r->dvd_destination) { errno=EOVERFLOW;return 0; }
     if (!bytes) return 1;
-    if (!path || !(iso=fopen(path,"rb"))) { if (!path) errno=ENOENT;return 0; }
+    if (!(iso=Bt4Iso_Open())) { if (!errno) errno=ENOENT;return 0; }
     result=fseeko(iso,(off_t)offset,SEEK_SET)==0 &&
         fread(Bt4Android_DecodePointer(r->dvd_destination),1,(size_t)bytes,iso)==bytes;
     if (!result && !ferror(iso)) errno=EIO;

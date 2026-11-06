@@ -1,3 +1,4 @@
+#include "../port_read_file.h"
 // The fight panels: with "Side bars: Fighter panels", the side bars of a 4:3 fight in a wide window become each
 // side's own panel, as in the JoJo fighting games of the time: the fighter's large portrait (the one of the
 // character select), faded softly into the panel at its edges, over the fighter's colours, with its name down the
@@ -187,7 +188,7 @@ static int csm1(int i) {
 
 // The portrait file at path as RGBA (256 x 512 x 4 bytes, the PS2's alpha doubled). 1 = read.
 static int portrait_rgba(const char *path, uint8_t *rgba, uint32_t *signature = NULL) {
-    FILE *fp = fopen(path, "rb");
+    FILE *fp = Port_ReadFile(path);
     if (fp == NULL) {
         return 0;
     }

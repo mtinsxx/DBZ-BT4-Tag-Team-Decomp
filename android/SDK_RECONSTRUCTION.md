@@ -568,3 +568,20 @@ ISO program files against the already size/CRC-verified extracted profile.
 Tests use synthetic ISO records/payloads and a sparse file beyond 6 GiB; match,
 byte/size mismatch, absent entries and malformed metadata are covered. No fake
 LSNs, reconstructed sector padding or silent folder fallback is introduced.
+
+
+## Galaxy first-test follow-up: fingerprint profiles and direct SAF I/O
+
+The first device test stopped at profile rejection, not a demonstrated crash.
+Desktop installer markers defaulted to Spanish when absent from the Android
+Disc import; the English main's 2115696 bytes were rejected against Spanish
+2115688. The original private main passes the actual new verifier as English
+(CRC32 9d2224c1). Both profiles now use the unchanged exact size/CRC catalogue,
+with all three base programs still required; unsupported data is not bypassed.
+
+Android now reads a retained, bounded SAF fd directly, including ISO9660, DVD
+sectors and AFS members. No full private ISO or extracted Disc copy is needed.
+The 102 SDK dispositions remain intact. Full links now include 134 runtime
+units plus 274 game units, with no undefined/ABS32 errors. Tests add profile
+and descriptor/AFS boundary coverage; see [ANDROID_BOOT.md](ANDROID_BOOT.md).
+No corrected-version Galaxy boot, Vulkan frame or gameplay is claimed.
