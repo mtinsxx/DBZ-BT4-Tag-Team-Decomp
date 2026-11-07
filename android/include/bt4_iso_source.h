@@ -15,6 +15,8 @@ FILE *Bt4Iso_Open(void);
    Returns an independently seekable, read-only bounded view (including AFS).
    No extraction/cache on disk and no reads beyond a member's actual extent. */
 FILE *Bt4Iso_OpenFile(const char *relative);
+/* Thread-local last open diagnostic, copied before the next OpenFile call. */
+const char *Bt4Iso_LastError(void);
 #ifdef __cplusplus
 }
 #endif
