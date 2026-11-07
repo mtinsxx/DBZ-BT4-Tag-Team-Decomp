@@ -1,4 +1,5 @@
 #include "tenkaichi/runtime.hpp"
+#include "tenkaichi/preparation.hpp"
 #include <SDL3/SDL.h>
 #include <jni.h>
 #include <android/log.h>
@@ -12,6 +13,7 @@ extern "C" {
 namespace tenkaichi {
 static std::string root,profile,mountError;
 static bool compatible=false;
+void diagnosticRoot(const std::string& path){root=path;}
 static void sdlLog(void*,int category,SDL_LogPriority priority,const char* message) {
     std::fprintf(stderr,"SDL category=%d priority=%d %s\n",category,int(priority),message);std::fflush(stderr);
     __android_log_write(priority>=SDL_LOG_PRIORITY_ERROR?ANDROID_LOG_ERROR:ANDROID_LOG_INFO,"TenkaichiNative",message);
@@ -53,9 +55,9 @@ extern "C" __attribute__((visibility("default"))) int SDL_main(int argc,char** a
         else {
             status("ENGINE_READY","Native 64-bit resource runtime initialized; compatible "+profile);
             Image image;std::string error;
-            status("RESOURCE","Reading "+std::string(portrait0.path)+" expected CRC32=f1186a78");
-            if(!loadPortrait(portrait0,image,error))status("ERROR",error);
-            else {status("CONVERTED","Original portrait CRC32=f1186a78 -> native RGBA8 256x512, ordinary owned memory");result=renderResource(image);}
+            status("CACHE","Checking versioned manifest and SHA-256 of prepared portrait; no conversion during rendering");
+            if(!loadPreparedPortrait(root,profile,image,error))status("ERROR",error);
+            else {status("CACHE_VALID","Prepared original portrait -> native RGBA8 256x512; game systems remain incomplete");result=renderResource(image);}
         }
     } catch(const std::exception& error) {status("ERROR",error.what());}
     Bt4Iso_Unmount();return result;

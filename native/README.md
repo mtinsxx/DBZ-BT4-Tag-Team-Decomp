@@ -1,12 +1,12 @@
-# Tenkaichi native engine — marco de recurso original
+# Engine nativa e preparação de recursos
 
-Branch `feature/android-native-engine-rebuild`, derivada de motor `e46f12b` e
-principal `d3df5f9`. A linha `feature/android-llvm-runtime` permanece intacta.
+O alvo C++ ARM64 é compilado antecipadamente no APK, sem compilar ou executar
+código PS2 no Android. A versão 0.6 prepara o retrato original em cache privado,
+com manifesto versionado/hashes, e o renderer Vulkan consome esse cache.
+O jogo completo ainda não está implementado; INICIAR JOGO permanece bloqueado.
 
-Este alvo novo **não executa o jogo**. Implementa o primeiro percurso de
-viabilidade: memória nativa 64 bits → ISO SAF compatível → retrato original
-B14 → RGBA8 próprio → pipeline SDL3 GPU/Vulkan → submissão e readback.
-Não carrega `libtenkaichi_mobile.so`, Game_Main, janela guest, GS ou VU1.
+Consulte [PREPARATION.md](docs/PREPARATION.md) para o índice DBZ4, recuperação,
+progresso real, testes e investigação dos próximos modelos/animações.
 
 ## Evidência do recurso escolhido
 
@@ -38,7 +38,8 @@ preserva sua proporção/alpha. Essa superfície **não é geometria de personag
 Modelos 3D, esqueletos, animações, materiais 3D, combate e menus do jogo não
 estão implementados neste alvo. O teste não serve para declarar BT4 funcional.
 
-O runtime registra ENGINE_READY, RESOURCE, CONVERTED, VULKAN, SUBMITTED ou
+A preparação registra VERIFYING/CONVERTED/RESOURCE_READY_GAME_INCOMPLETE.
+O renderer registra ENGINE_READY, CACHE_VALID, VULKAN, SUBMITTED ou
 ERROR em `native-engine-status.txt` e no log. Uma primeira submissão bem-sucedida
 aguarda fence e tenta capturar o alvo GPU próprio em `native-first-frame.png`.
 Readback/submissão não comprovam visualização física; só o proprietário valida
@@ -79,7 +80,7 @@ dependências, assinatura e alinhamento ZIP. Também rejeita símbolos Sony
 `sce*` no link (wrappers não usados do leitor compartilhado são ocultos e
 eliminados pelo linker). Produz
 `build/native-apk/TenkaichiMobile.apk` apenas com SDL e o novo alvo. O CI publica
-`TenkaichiMobile-native-resource-arm64`, sem release.
+`TenkaichiMobile-native-preparation-arm64`, sem release.
 
 ## Limites e próximo passo
 

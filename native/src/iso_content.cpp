@@ -1,4 +1,6 @@
 #include "tenkaichi/assets.hpp"
+#include "tenkaichi/preparation.hpp"
+#include "tenkaichi/inspection.hpp"
 #include <cerrno>
 #include <cstdio>
 #include <cstring>
@@ -31,25 +33,36 @@ bool mountCompatibleIso(int fd,std::int64_t start,std::int64_t length,std::strin
     }
     profile=language?"ENG":"ESP";return true;
 }
-bool loadPortrait(const Resource& resource,Image& output,std::string& error) {
-    output={};error.clear();
+bool readVerifiedResource(const Resource& resource,std::vector<std::uint8_t>& packed,std::string& error) {
+    packed.clear();error.clear();
     if(!resource.path){error="Portrait: missing resource locator";return false;}
     File file(Bt4Iso_OpenFile(resource.path));
-    if(!file){error="AFS resource unavailable: "+std::string(resource.path)+" errno="+std::to_string(errno);return false;}
-    Bt4FileFingerprint fingerprint{};
-    if(!Bt4Base_Fingerprint(file.get(),&fingerprint)||!fingerprint.size||fingerprint.size>1024*1024) {
-        error="Portrait: invalid size/read error";return false;
+    if(!file){error="AFS resource unavailable: "+std::string(resource.path)+" errno="+std::to_string(errno)+" "+Bt4Iso_LastError();return false;}
+    if(fseeko(file.get(),0,SEEK_END)){error="Resource size seek failed: "+std::string(resource.path);return false;}
+    const auto size=ftello(file.get());
+    if(size<=0||size>4*1024*1024||(resource.bytes&&std::uint64_t(size)!=resource.bytes)){
+        error="Resource size mismatch "+std::string(resource.path)+" expected="+std::to_string(resource.bytes)+" observed="+std::to_string(size);return false;
     }
-    if(fingerprint.crc!=resource.crc) {
-        char detail[128];std::snprintf(detail,sizeof(detail)," expected=%08x observed=%08x bytes=%llu",resource.crc,
-            fingerprint.crc,static_cast<unsigned long long>(fingerprint.size));
-        error="Unsupported portrait fingerprint "+std::string(resource.path)+detail;return false;
-    }
-    std::vector<std::uint8_t> packed(static_cast<std::size_t>(fingerprint.size));
+    packed.resize(static_cast<std::size_t>(size));
     if(std::fseek(file.get(),0,SEEK_SET)||std::fread(packed.data(),1,packed.size(),file.get())!=packed.size()) {
-        error="Portrait: truncated positioned read";return false;
+        packed.clear();error="Resource: truncated positioned read "+std::string(resource.path);return false;
     }
+    std::uint32_t crc=UINT32_MAX;
+    for(auto value:packed){crc^=value;for(unsigned bit=0;bit<8;++bit)crc=(crc>>1)^((crc&1)?0xedb88320u:0u);}
+    crc=~crc;
+    if(crc!=resource.crc) {
+        char detail[128];std::snprintf(detail,sizeof(detail)," expected=%08x observed=%08x bytes=%llu",resource.crc,
+            crc,static_cast<unsigned long long>(packed.size()));
+        packed.clear();error="Unsupported resource fingerprint "+std::string(resource.path)+detail;return false;
+    }
+    return true;
+}
+bool loadPortrait(const Resource& resource,Image& output,std::string& error) {
+    output={};std::vector<std::uint8_t> packed;
+    if(!readVerifiedResource(resource,packed,error))return false;
+    if(packed.size()>1024*1024){error="Portrait: source exceeds converter limit";return false;}
     if(!decodePortrait({packed.data(),packed.size()},output,error))return false;
-    output.source_crc=fingerprint.crc;return true;
+    output.source_crc=resource.crc;output.source_bytes=packed.size();
+    output.source_sha256=sha256({packed.data(),packed.size()});return true;
 }
 }

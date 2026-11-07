@@ -4,7 +4,7 @@ set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 find_package(Threads REQUIRED)
-add_library(tenkaichi_assets STATIC src/portrait.cpp src/iso_content.cpp
+add_library(tenkaichi_assets STATIC src/portrait.cpp src/iso_content.cpp src/sha256.cpp src/preparation.cpp src/inspection.cpp
     ../android/src/bt4_iso_source.c ../android/src/bt4_iso9660.c ../port/src/bt4_base_profile.c)
 target_include_directories(tenkaichi_assets PUBLIC include PRIVATE ../android/include ../port/src ../port/include)
 target_link_libraries(tenkaichi_assets PUBLIC Threads::Threads)
@@ -21,7 +21,7 @@ if(ANDROID)
         COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/shaders.py"
             "${CMAKE_CURRENT_SOURCE_DIR}/shaders" "${CMAKE_CURRENT_BINARY_DIR}/generated/resource_shaders.hpp"
         DEPENDS shaders/resource.vert shaders/resource.frag tools/shaders.py VERBATIM)
-    add_library(tenkaichi_native SHARED src/android_entry.cpp src/renderer.cpp
+    add_library(tenkaichi_native SHARED src/android_entry.cpp src/renderer.cpp src/preparation_jni.cpp
         "${CMAKE_CURRENT_BINARY_DIR}/generated/resource_shaders.hpp")
     target_link_libraries(tenkaichi_native PRIVATE tenkaichi_assets SDL3::SDL3 android log)
     target_include_directories(tenkaichi_native PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/generated" ../android/include)
@@ -38,6 +38,11 @@ else()
     target_link_libraries(native_assets_tests PRIVATE tenkaichi_assets)
     target_include_directories(native_assets_tests PRIVATE ../android/include ../port/src ../port/include)
     target_compile_options(native_assets_tests PRIVATE -Wall -Wextra -Werror -UNDEBUG)
+    add_executable(native_preparation_tests tests/preparation_test.cpp)
+    target_link_libraries(native_preparation_tests PRIVATE tenkaichi_assets)
+    target_include_directories(native_preparation_tests PRIVATE ../android/include ../port/src ../port/include)
+    target_compile_options(native_preparation_tests PRIVATE -Wall -Wextra -Werror -UNDEBUG)
+    add_test(NAME native_preparation_contracts COMMAND native_preparation_tests)
     add_test(NAME native_resource_contracts COMMAND native_assets_tests)
-    set_tests_properties(native_resource_contracts PROPERTIES TIMEOUT 30 ENVIRONMENT "ASAN_OPTIONS=detect_leaks=0")
+    set_tests_properties(native_resource_contracts native_preparation_contracts PROPERTIES TIMEOUT 30 ENVIRONMENT "ASAN_OPTIONS=detect_leaks=0")
 endif()

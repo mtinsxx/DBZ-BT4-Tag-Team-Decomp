@@ -1,6 +1,7 @@
 #define _GNU_SOURCE
 #include "bt4_iso_source.h"
 #include "bt4_iso9660.h"
+#include "bt4_sector_index.h"
 #include "port_host.h"
 #include <errno.h>
 #include <fcntl.h>
@@ -10,6 +11,9 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <unistd.h>
+
+static _Thread_local char last_error[512];
+const char *Bt4Iso_LastError(void) { return last_error; }
 
 typedef struct Slice { int fd;int64_t base,length,position; } Slice;
 PORT_HOST static int mounted_fd=-1;
@@ -96,6 +100,7 @@ FILE *Bt4Iso_Open(void) {
 static uint32_t le32(const unsigned char *p) { return (uint32_t)p[0]|(uint32_t)p[1]<<8|(uint32_t)p[2]<<16|(uint32_t)p[3]<<24; }
 FILE *Bt4Iso_OpenFile(const char *relative) {
     Bt4IsoFile entry;FILE *iso;char path[256];uint64_t offset,size,index=0;
+    const char *stage="open";last_error[0]=0;
     if(!relative || !Bt4Iso_IsMounted()) { errno=ENODEV;return NULL; }
     iso=Bt4Iso_Open();if(!iso)return NULL;
     if(!strncmp(relative,"disc/",5)) {
@@ -119,22 +124,51 @@ FILE *Bt4Iso_OpenFile(const char *relative) {
             index=index*10+(unsigned)(*digit-'0');if(index>UINT32_MAX)goto missing;
         }
         if(strcmp(digit,".bin"))goto missing;
-        snprintf(path,sizeof(path),"DATA/%s.AFS",archive);
+        snprintf(path,sizeof(path),"DATA/%s.AFS",archive);stage="ISO archive lookup";
         int found=Bt4Iso_Find(iso,path,&entry);
         if(found<0)goto malformed;
         if(!found)goto missing;
-        if(entry.size<8)goto malformed;
         offset=(uint64_t)entry.sector*2048;
-        if(fseeko(iso,(off_t)offset,SEEK_SET) || fread(header,1,8,iso)!=8 || memcmp(header,"AFS\0",4))goto malformed;
-        count=le32(header+4);
-        if(count>(entry.size-8)/8)goto malformed;
-        if(index>=count)goto missing;
-        if(fseeko(iso,(off_t)(offset+8+(uint64_t)index*8),SEEK_SET) || fread(record,1,8,iso)!=8)goto malformed;
-        member_offset=le32(record);member_size=le32(record+4);
-        if((member_size && member_offset<8+(uint64_t)count*8) || member_offset>entry.size || member_size>entry.size-member_offset)goto malformed;
-        offset+=member_offset;size=member_size;
+        /* BT4's native extractor resolves the archive via DBZ4.BIN, not
+           a CRI AFS header. Keep classic CRI support for earlier fixtures
+           and discs only when the BT4 index is absent. */
+        Bt4IsoFile dbentry;stage="DBZ4 index lookup";
+        int dbfound=Bt4Iso_Find(iso,"BIN/DBZ4.BIN",&dbentry);
+        if(dbfound<0)goto malformed;
+        if(dbfound) {
+            unsigned char *db;uint64_t within=0,bytes=0;uint32_t members=0;
+            stage="DBZ4 sector table";
+            if(length!=7||strncmp(archive,"PZS4US",6)||archive[6]<'0'||archive[6]>'3'||
+               !dbentry.size||dbentry.size>1024*1024)goto malformed;
+            db=malloc(dbentry.size);if(!db){fclose(iso);return NULL;}
+            int read_ok=!fseeko(iso,(off_t)((uint64_t)dbentry.sector*2048),SEEK_SET)&&
+                fread(db,1,dbentry.size,iso)==dbentry.size;
+            int range=read_ok?Bt4Sector_Range(db,dbentry.size,(unsigned)(archive[6]-'0'),index,
+                entry.size,&within,&bytes,&members):-1;free(db);
+            if(range<0)goto malformed;
+            if(!range)goto missing;
+            snprintf(last_error,sizeof(last_error),"BT4 sector index archive=%s member=%llu count=%u ISO-offset=%llu bytes=%llu",
+                path,(unsigned long long)index,members,(unsigned long long)(offset+within),(unsigned long long)bytes);
+            offset+=within;size=bytes;
+        } else {
+            stage="classic AFS header (BT4 DBZ4 index absent)";
+            if(entry.size<8)goto malformed;
+            if(fseeko(iso,(off_t)offset,SEEK_SET) || fread(header,1,8,iso)!=8 || memcmp(header,"AFS\0",4))goto malformed;
+            count=le32(header+4);
+            if(count>(entry.size-8)/8)goto malformed;
+            if(index>=count)goto missing;
+            stage="classic AFS member extent";
+            if(fseeko(iso,(off_t)(offset+8+(uint64_t)index*8),SEEK_SET) || fread(record,1,8,iso)!=8)goto malformed;
+            member_offset=le32(record);member_size=le32(record+4);
+            if((member_size && member_offset<8+(uint64_t)count*8) || member_offset>entry.size || member_size>entry.size-member_offset)goto malformed;
+            offset+=member_offset;size=member_size;
+        }
     }
     fclose(iso);return open_range(offset,size);
-malformed: errno=EIO;fclose(iso);return NULL;
-missing: errno=ENOENT;fclose(iso);return NULL;
+malformed:
+    snprintf(last_error,sizeof(last_error),"stage=%s resource=%s member=%llu malformed/truncated metadata or extent",stage,relative,(unsigned long long)index);
+    fclose(iso);errno=EIO;return NULL;
+missing:
+    snprintf(last_error,sizeof(last_error),"stage=%s resource=%s member=%llu not found",stage,relative,(unsigned long long)index);
+    fclose(iso);errno=ENOENT;return NULL;
 }

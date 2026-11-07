@@ -120,3 +120,10 @@ etapa pode inspecionar esses membros com diagnósticos específicos.
 Hoje nenhuma dessas etapas de gameplay/3D está implementada no alvo novo.
 O código válido antigo é uma referência para migração, não é descartado nem
 rotulado como port completo. O build não certifica execução no aparelho.
+
+## Continuidade: preparação e índice BT4
+
+A versão 0.6 implementa o índice de setores BT4 em DBZ4.BIN, ausente no reader
+clássico reaproveitado na 0.5, cache transacional e investigação de metadados
+do primeiro modelo. Consulte [PREPARATION.md](PREPARATION.md) para a correção,
+contratos de integridade/retomada e bloqueios 3D. O jogo continua incompleto.
