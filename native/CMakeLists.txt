@@ -42,7 +42,22 @@ else()
     target_link_libraries(native_preparation_tests PRIVATE tenkaichi_assets)
     target_include_directories(native_preparation_tests PRIVATE ../android/include ../port/src ../port/include)
     target_compile_options(native_preparation_tests PRIVATE -Wall -Wextra -Werror -UNDEBUG)
+    find_package(Python3 REQUIRED COMPONENTS Interpreter)
+    add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/generated/desktop_portrait_reference.cpp"
+        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/desktop_portrait_reference.py"
+            "${CMAKE_CURRENT_SOURCE_DIR}/../port/src/gs/fight_panels_ui.cpp"
+            "${CMAKE_CURRENT_BINARY_DIR}/generated/desktop_portrait_reference.cpp"
+        DEPENDS tools/desktop_portrait_reference.py ../port/src/gs/fight_panels_ui.cpp VERBATIM)
+    add_executable(native_pixel_reference_tests tests/pixel_reference_test.cpp
+        "${CMAKE_CURRENT_BINARY_DIR}/generated/desktop_portrait_reference.cpp")
+    target_link_libraries(native_pixel_reference_tests PRIVATE tenkaichi_assets)
+    target_compile_options(native_pixel_reference_tests PRIVATE -Wall -Wextra -Werror -UNDEBUG)
+    add_test(NAME native_desktop_pixel_reference COMMAND native_pixel_reference_tests)
+    add_executable(native_presentation_tests tests/presentation_test.cpp)
+    target_link_libraries(native_presentation_tests PRIVATE tenkaichi_assets)
+    target_compile_options(native_presentation_tests PRIVATE -Wall -Wextra -Werror -UNDEBUG)
+    add_test(NAME native_presentation_contracts COMMAND native_presentation_tests)
     add_test(NAME native_preparation_contracts COMMAND native_preparation_tests)
     add_test(NAME native_resource_contracts COMMAND native_assets_tests)
-    set_tests_properties(native_resource_contracts native_preparation_contracts PROPERTIES TIMEOUT 30 ENVIRONMENT "ASAN_OPTIONS=detect_leaks=0")
+    set_tests_properties(native_resource_contracts native_preparation_contracts native_presentation_contracts native_desktop_pixel_reference PROPERTIES TIMEOUT 30 ENVIRONMENT "ASAN_OPTIONS=detect_leaks=0")
 endif()

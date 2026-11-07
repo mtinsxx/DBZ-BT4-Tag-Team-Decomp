@@ -1,4 +1,6 @@
 #include "tenkaichi/runtime.hpp"
+#include "tenkaichi/presentation.hpp"
+#include "tenkaichi/preparation.hpp"
 #include "resource_shaders.hpp"
 #include <SDL3/SDL.h>
 #include <algorithm>
@@ -22,6 +24,18 @@ struct Gpu {
         if(window)SDL_DestroyWindow(window);SDL_Quit();
     }
 };
+// Once a swapchain image has been acquired SDL forbids cancelling its command
+// buffer. Submit a clear on resize/error paths so the acquired image is released.
+static bool releaseAcquired(SDL_GPUCommandBuffer* cmd,SDL_GPUTexture* swap) {
+    SDL_GPUColorTargetInfo ct{};ct.texture=swap;ct.load_op=SDL_GPU_LOADOP_CLEAR;
+    ct.store_op=SDL_GPU_STOREOP_STORE;ct.clear_color={0.04f,0.04f,0.04f,1};
+    if(auto* pass=SDL_BeginGPURenderPass(cmd,&ct,1,nullptr))SDL_EndGPURenderPass(pass);
+    return SDL_SubmitGPUCommandBuffer(cmd);
+}
+static void viewport(SDL_GPURenderPass* pass,const PresentationRect& rect,Uint32 w,Uint32 h) {
+    SDL_GPUViewport view{rect.x,rect.y,rect.w,rect.h,0,1};SDL_SetGPUViewport(pass,&view);
+    SDL_Rect scissor{0,0,int(w),int(h)};SDL_SetGPUScissor(pass,&scissor);
+}
 static bool wait(SDL_GPUDevice* device,SDL_GPUFence* fence) {
     if(!fence)return false;bool ok=SDL_WaitForGPUFences(device,true,&fence,1);
     SDL_ReleaseGPUFence(device,fence);return ok;
@@ -42,6 +56,56 @@ static bool upload(Gpu& gpu,const Image& image) {
     SDL_UploadToGPUTexture(pass,&src,&dst,false);SDL_EndGPUCopyPass(pass);
     bool ok=wait(gpu.device,SDL_SubmitGPUCommandBufferAndAcquireFence(cmd));
     SDL_ReleaseGPUTransferBuffer(gpu.device,transfer);return ok;
+}
+// Check the exact uploaded pixels with a native-size, nearest, no-blend pass.
+// This isolates presentation from BPE/CLUT; it is not an original-game screenshot.
+static bool verifyPixels(Gpu& gpu,const Image& image) {
+    struct Probe {
+        Gpu& gpu;SDL_GPUTexture* target=nullptr;SDL_GPUGraphicsPipeline* pipeline=nullptr;
+        SDL_GPUSampler* sampler=nullptr;SDL_GPUTransferBuffer* transfer=nullptr;
+        ~Probe(){SDL_WaitForGPUIdle(gpu.device);
+            if(transfer)SDL_ReleaseGPUTransferBuffer(gpu.device,transfer);
+            if(sampler)SDL_ReleaseGPUSampler(gpu.device,sampler);
+            if(pipeline)SDL_ReleaseGPUGraphicsPipeline(gpu.device,pipeline);
+            if(target)SDL_ReleaseGPUTexture(gpu.device,target);}
+    } probe{gpu};
+    SDL_GPUTextureCreateInfo ti{};ti.type=SDL_GPU_TEXTURETYPE_2D;ti.format=SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM;
+    ti.usage=SDL_GPU_TEXTUREUSAGE_COLOR_TARGET;ti.width=image.width;ti.height=image.height;ti.layer_count_or_depth=1;ti.num_levels=1;
+    probe.target=SDL_CreateGPUTexture(gpu.device,&ti);
+    SDL_GPUColorTargetDescription color{};color.format=SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM;
+    SDL_GPUGraphicsPipelineCreateInfo pi{};pi.vertex_shader=gpu.vs;pi.fragment_shader=gpu.fs;
+    pi.primitive_type=SDL_GPU_PRIMITIVETYPE_TRIANGLELIST;pi.target_info.num_color_targets=1;pi.target_info.color_target_descriptions=&color;
+    probe.pipeline=SDL_CreateGPUGraphicsPipeline(gpu.device,&pi);
+    SDL_GPUSamplerCreateInfo sm{};sm.min_filter=sm.mag_filter=SDL_GPU_FILTER_NEAREST;sm.mipmap_mode=SDL_GPU_SAMPLERMIPMAPMODE_NEAREST;
+    sm.address_mode_u=sm.address_mode_v=sm.address_mode_w=SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
+    probe.sampler=SDL_CreateGPUSampler(gpu.device,&sm);
+    SDL_GPUTransferBufferCreateInfo bi{};bi.usage=SDL_GPU_TRANSFERBUFFERUSAGE_DOWNLOAD;bi.size=Uint32(image.rgba.size());
+    probe.transfer=SDL_CreateGPUTransferBuffer(gpu.device,&bi);
+    if(!probe.target||!probe.pipeline||!probe.sampler||!probe.transfer)return false;
+    auto* cmd=SDL_AcquireGPUCommandBuffer(gpu.device);if(!cmd)return false;
+    SDL_GPUColorTargetInfo ct{};ct.texture=probe.target;ct.load_op=SDL_GPU_LOADOP_CLEAR;ct.store_op=SDL_GPU_STOREOP_STORE;
+    auto* pass=SDL_BeginGPURenderPass(cmd,&ct,1,nullptr);if(!pass){SDL_CancelGPUCommandBuffer(cmd);return false;}
+    viewport(pass,{0,0,float(image.width),float(image.height)},image.width,image.height);
+    SDL_BindGPUGraphicsPipeline(pass,probe.pipeline);const float view[4]={1,1,0,0};
+    SDL_PushGPUVertexUniformData(cmd,0,view,sizeof(view));
+    SDL_GPUTextureSamplerBinding binding{gpu.asset,probe.sampler};SDL_BindGPUFragmentSamplers(pass,0,&binding,1);
+    SDL_DrawGPUPrimitives(pass,6,1,0,0);SDL_EndGPURenderPass(pass);
+    auto* copy=SDL_BeginGPUCopyPass(cmd);if(!copy){SDL_CancelGPUCommandBuffer(cmd);return false;}
+    SDL_GPUTextureRegion src{};src.texture=probe.target;src.w=image.width;src.h=image.height;src.d=1;
+    SDL_GPUTextureTransferInfo dst{};dst.transfer_buffer=probe.transfer;dst.pixels_per_row=image.width;dst.rows_per_layer=image.height;
+    SDL_DownloadFromGPUTexture(copy,&src,&dst);SDL_EndGPUCopyPass(copy);
+    if(!wait(gpu.device,SDL_SubmitGPUCommandBufferAndAcquireFence(cmd)))return false;
+    const auto* pixels=static_cast<const std::uint8_t*>(SDL_MapGPUTransferBuffer(gpu.device,probe.transfer,false));if(!pixels)return false;
+    std::size_t different=0;for(std::size_t i=0;i<image.rgba.size();++i)different+=pixels[i]!=image.rgba[i];
+    const auto detail="converted-sha256="+sha256({image.rgba.data(),image.rgba.size()})+
+        " gpu-native-size-sha256="+sha256({pixels,image.rgba.size()})+" mismatched-bytes="+std::to_string(different)+
+        " compared-bytes="+std::to_string(image.rgba.size())+"; GPU vs converted cache, not original-game screenshot";
+    SDL_UnmapGPUTransferBuffer(gpu.device,probe.transfer);
+    if(FILE* out=std::fopen("native-pixel-check.txt.tmp","w")){std::fprintf(out,"%s\n",detail.c_str());
+        if(!std::fclose(out))std::rename("native-pixel-check.txt.tmp","native-pixel-check.txt");}
+    status("PIXEL_CHECK",detail);
+    if(different){SDL_SetError("Native-size GPU readback differs from converted pixels; see native-pixel-check.txt");return false;}
+    return true;
 }
 static bool capture(Gpu& gpu) {
     SDL_GPUTransferBufferCreateInfo bi{};bi.usage=SDL_GPU_TRANSFERBUFFERUSAGE_DOWNLOAD;bi.size=gpu.w*gpu.h*4;
@@ -64,6 +128,7 @@ static bool capture(Gpu& gpu) {
 int renderResource(const Image& image) {
     Gpu gpu;auto fail=[&](const char* operation){status("ERROR",std::string(operation)+": "+SDL_GetError());return 2;};
     if(image.width!=256||image.height!=512||image.rgba.size()!=256*512*4){status("ERROR","Invalid native image contract");return 2;}
+    if(!SDL_SetHintWithPriority(SDL_HINT_ORIENTATIONS,"LandscapeLeft LandscapeRight",SDL_HINT_OVERRIDE))return fail("landscape orientation policy");
     if(!SDL_Init(SDL_INIT_VIDEO|SDL_INIT_EVENTS))return fail("SDL video");
     gpu.device=SDL_CreateGPUDevice(SDL_GPU_SHADERFORMAT_SPIRV,true,"vulkan");if(!gpu.device)return fail("Vulkan device");
     status("VULKAN",std::string("actual backend=")+SDL_GetGPUDeviceDriver(gpu.device));
@@ -87,30 +152,62 @@ int renderResource(const Image& image) {
     sm.address_mode_u=sm.address_mode_v=sm.address_mode_w=SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
     gpu.sampler=SDL_CreateGPUSampler(gpu.device,&sm);if(!gpu.sampler)return fail("resource sampler");
     if(!upload(gpu,image))return fail("native texture upload/fence");
+    if(!verifyPixels(gpu,image))return fail("native-size texture/shader pixel comparison");
     status("UPLOADED","Native RGBA8 256x512 upload fence complete");
-    bool first=true;bool running=true;
+    bool first=true;bool running=true;bool recreate=false;
+    unsigned generation=0,mismatches=0;
     while(running) {
-        SDL_Event event;while(SDL_PollEvent(&event))if(event.type==SDL_EVENT_QUIT ||
-            (event.type==SDL_EVENT_KEY_DOWN&&event.key.key==SDLK_ESCAPE))running=false;
+        SDL_Event event;
+        while(SDL_PollEvent(&event)) {
+            if(event.type==SDL_EVENT_QUIT||(event.type==SDL_EVENT_KEY_DOWN&&event.key.key==SDLK_ESCAPE))running=false;
+            if(event.type==SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED||event.type==SDL_EVENT_WINDOW_RESIZED||
+               event.type==SDL_EVENT_WINDOW_DISPLAY_CHANGED||event.type==SDL_EVENT_DISPLAY_ORIENTATION||
+               event.type==SDL_EVENT_DID_ENTER_FOREGROUND) {
+                recreate=true;
+                SDL_Log("presentation invalidation event=%u",event.type);
+            }
+        }
         if(!running)break;
+        int logicalW=0,logicalH=0,pixelW=0,pixelH=0;
+        if(!SDL_GetWindowSize(gpu.window,&logicalW,&logicalH)||!SDL_GetWindowSizeInPixels(gpu.window,&pixelW,&pixelH))return fail("drawable dimensions");
+        if(pixelW<=0||pixelH<=0){SDL_Delay(16);continue;}
         auto* cmd=SDL_AcquireGPUCommandBuffer(gpu.device);if(!cmd)return fail("acquire command");
         SDL_GPUTexture* swap=nullptr;Uint32 w=0,h=0;
         if(!SDL_WaitAndAcquireGPUSwapchainTexture(cmd,gpu.window,&swap,&w,&h)) {SDL_CancelGPUCommandBuffer(cmd);return fail("swapchain acquisition");}
         if(!swap){SDL_CancelGPUCommandBuffer(cmd);SDL_Delay(16);continue;}
-        if(w>4096||h>4096||!w||!h){SDL_CancelGPUCommandBuffer(cmd);status("ERROR","Unsupported drawable extent "+std::to_string(w)+"x"+std::to_string(h));return 2;}
-        if(gpu.w!=w||gpu.h!=h) {
-            status("DRAWABLE",std::to_string(w)+"x"+std::to_string(h)+" native render target");
-            SDL_WaitForGPUIdle(gpu.device);if(gpu.target)SDL_ReleaseGPUTexture(gpu.device,gpu.target);
+        if(w>4096||h>4096||!w||!h){releaseAcquired(cmd,swap);status("ERROR","Unsupported drawable extent "+std::to_string(w)+"x"+std::to_string(h));return 2;}
+        // A resize may race acquisition. Never stretch a stale image over a
+        // differently shaped Android surface; return it and renew the claim.
+        if(w!=Uint32(pixelW)||h!=Uint32(pixelH)) {
+            ++mismatches;
+            if(mismatches==1||mismatches%30==0)status("RESIZING","drawable="+std::to_string(pixelW)+"x"+std::to_string(pixelH)+" swapchain="+std::to_string(w)+"x"+std::to_string(h)+" mismatch-attempt="+std::to_string(mismatches));
+            if(!releaseAcquired(cmd,swap)||!SDL_WaitForGPUIdle(gpu.device))return fail("resize image release");
+            SDL_ReleaseWindowFromGPUDevice(gpu.device,gpu.window);gpu.claimed=false;
+            if(!SDL_ClaimWindowForGPUDevice(gpu.device,gpu.window))return fail("resize surface reclaim");
+            gpu.claimed=true;recreate=true;
+            if(mismatches>=120){status("ERROR","Drawable/swapchain extent mismatch persists after surface reclaim; see presentation diagnostics");return 2;}
+            SDL_Delay(16);continue;
+        }
+        mismatches=0;
+        PresentationRect rect;
+        if(!fitResource(image.width,image.height,w,h,rect)){releaseAcquired(cmd,swap);status("ERROR","Invalid aspect-fit dimensions");return 2;}
+        if(gpu.w!=w||gpu.h!=h||recreate) {
+            if(!SDL_WaitForGPUIdle(gpu.device)){releaseAcquired(cmd,swap);return fail("presentation idle");}
+            if(gpu.target)SDL_ReleaseGPUTexture(gpu.device,gpu.target);
             SDL_GPUTextureCreateInfo ti{};ti.type=SDL_GPU_TEXTURETYPE_2D;ti.format=SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM;
             ti.usage=SDL_GPU_TEXTUREUSAGE_COLOR_TARGET|SDL_GPU_TEXTUREUSAGE_SAMPLER;ti.width=w;ti.height=h;ti.layer_count_or_depth=1;ti.num_levels=1;
             gpu.target=SDL_CreateGPUTexture(gpu.device,&ti);gpu.w=w;gpu.h=h;
-            if(!gpu.target){SDL_CancelGPUCommandBuffer(cmd);return fail("native frame target");}
+            if(!gpu.target){releaseAcquired(cmd,swap);return fail("native frame target");}
+            recreate=false;first=true;++generation;
+            char geometry[512];std::snprintf(geometry,sizeof(geometry),"generation=%u logical=%dx%d drawable=%dx%d swapchain=%ux%u target=%ux%u source=%ux%u viewport=(%.3f,%.3f %.3fx%.3f) source-ratio=%.8f viewport-ratio=%.8f",
+                generation,logicalW,logicalH,pixelW,pixelH,w,h,gpu.w,gpu.h,image.width,image.height,rect.x,rect.y,rect.w,rect.h,double(image.width)/image.height,double(rect.w)/rect.h);
+            status("DRAWABLE",geometry);
         }
         SDL_GPUColorTargetInfo ct{};ct.texture=gpu.target;ct.load_op=SDL_GPU_LOADOP_CLEAR;ct.store_op=SDL_GPU_STOREOP_STORE;ct.clear_color={0.04f,0.04f,0.04f,1};
-        auto* pass=SDL_BeginGPURenderPass(cmd,&ct,1,nullptr);if(!pass){SDL_CancelGPUCommandBuffer(cmd);return fail("render pass");}
+        auto* pass=SDL_BeginGPURenderPass(cmd,&ct,1,nullptr);if(!pass){releaseAcquired(cmd,swap);return fail("render pass");}
         SDL_BindGPUGraphicsPipeline(pass,gpu.pipeline);
-        float view[4]={1,1,0,0};float aspect=float(w)/float(h),resource=float(image.width)/float(image.height);
-        if(aspect>resource)view[0]=resource/aspect;else view[1]=aspect/resource;
+        viewport(pass,rect,w,h);
+        float view[4]={1,1,0,0}; // Scaling is applied exactly once, in the viewport.
         SDL_PushGPUVertexUniformData(cmd,0,view,sizeof(view));
         SDL_GPUTextureSamplerBinding binding{gpu.asset,gpu.sampler};SDL_BindGPUFragmentSamplers(pass,0,&binding,1);
         SDL_DrawGPUPrimitives(pass,6,1,0,0);SDL_EndGPURenderPass(pass);

@@ -17,7 +17,7 @@ static std::vector<std::uint8_t> pack(const std::vector<std::uint8_t>& raw) {
     }
     word(out,4,out.size()-8);return out;
 }
-static std::vector<std::uint8_t> fixture() {
+[[maybe_unused]] static std::vector<std::uint8_t> fixture() {
     std::vector<std::uint8_t> raw(0x60+131072+1024);
     word(raw,0,1);word(raw,4,8);word(raw,0x20,0);word(raw,0x24,131072/4);
     for(unsigned i=0;i<131072;++i)raw[0x60+i]=8;
@@ -26,7 +26,7 @@ static std::vector<std::uint8_t> fixture() {
     raw[0x60+131072+16*4+2]=71;raw[0x60+131072+16*4+3]=64;
     return pack(raw);
 }
-static unsigned record(std::uint8_t* p,unsigned sector,unsigned size,bool directory,const char* name,unsigned len) {
+[[maybe_unused]] static unsigned record(std::uint8_t* p,unsigned sector,unsigned size,bool directory,const char* name,unsigned len) {
     unsigned count=33+len+(len%2==0);std::memset(p,0,count);p[0]=std::uint8_t(count);
     for(unsigned i=0;i<4;++i) {p[2+i]=std::uint8_t(sector>>(8*i));p[9-i]=p[2+i];p[10+i]=std::uint8_t(size>>(8*i));p[17-i]=p[10+i];}
     p[25]=directory?2:0;p[28]=p[31]=1;p[32]=std::uint8_t(len);std::memcpy(p+33,name,len);return count;

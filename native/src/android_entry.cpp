@@ -48,6 +48,7 @@ extern "C" __attribute__((visibility("default"))) int SDL_main(int argc,char** a
     std::rename("native-engine.log","native-engine.previous.log");
     if(std::freopen("native-engine.log","w",stderr))setvbuf(stderr,nullptr,_IONBF,0);
     SDL_SetLogOutputFunction(sdlLog,nullptr);
+    unlink("native-pixel-check.txt");unlink("native-pixel-check.txt.tmp");
     unlink("native-first-frame.png");unlink("native-first-frame.png.tmp");
     int result=2;
     try {
