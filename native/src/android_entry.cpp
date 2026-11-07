@@ -55,10 +55,10 @@ extern "C" __attribute__((visibility("default"))) int SDL_main(int argc,char** a
         if(!compatible)status("ERROR",mountError.empty()?"No verified ISO descriptor supplied":mountError);
         else {
             status("ENGINE_READY","Native 64-bit resource runtime initialized; compatible "+profile);
-            Image image;std::string error;
+            Engine engine;std::string error;
             status("CACHE","Checking versioned manifest and SHA-256 of prepared portrait; no conversion during rendering");
-            if(!loadPreparedPortrait(root,profile,image,error))status("ERROR",error);
-            else {status("CACHE_VALID","Prepared original portrait -> native RGBA8 256x512; game systems remain incomplete");result=renderResource(image);}
+            if(!engine.openPreparedContent(root,profile,error))status("ERROR",error);
+            else {status("CACHE_VALID","Prepared original portrait -> native RGBA8 256x512; game systems remain incomplete");result=renderEngine(engine);}
         }
     } catch(const std::exception& error) {status("ERROR",error.what());}
     Bt4Iso_Unmount();return result;

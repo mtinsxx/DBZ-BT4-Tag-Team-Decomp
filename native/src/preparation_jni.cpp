@@ -1,5 +1,6 @@
 #include "tenkaichi/preparation.hpp"
 #include "tenkaichi/inspection.hpp"
+#include "tenkaichi/character_preparation.hpp"
 #include "tenkaichi/runtime.hpp"
 #include <jni.h>
 #include <cstdio>
@@ -71,13 +72,35 @@ extern "C" JNIEXPORT jstring JNICALL Java_com_mtinsxx_tenkaichimobile_NativePrep
     return env->NewStringUTF(error.c_str());
 }
 extern "C" JNIEXPORT jstring JNICALL Java_com_mtinsxx_tenkaichimobile_NativePreparation_inspect(
-    JNIEnv* env,jclass,jint fd,jlong start,jlong length,jstring directory){
+    JNIEnv* env,jclass,jint fd,jlong start,jlong length,jstring directory,jobject listener){
     std::unique_lock<std::mutex> session(sourceSession,std::try_to_lock);
     if(!session.owns_lock())return env->NewStringUTF("A resource task is still active");
     Utf path(env,directory);if(!path.text)return nullptr;const std::string root=path.text;
     std::string profile,error,report;bool ok=false;
+    auto cls=env->GetObjectClass(listener);if(!cls)return nullptr;
+    auto method=env->GetMethodID(cls,"onProgress","(Ljava/lang/String;IIIJJJ)Z");env->DeleteLocalRef(cls);if(!method)return nullptr;
     try{
-        if(tenkaichi::mountCompatibleIso(fd,start,length,profile,error))ok=tenkaichi::inspectCharacter0(report,error);
+        if(tenkaichi::mountCompatibleIso(fd,start,length,profile,error)){
+            ok=tenkaichi::inspectCharacter0(report,error);
+            if(ok){
+                auto observer=[&](const tenkaichi::CharacterPreparationProgress& p){
+                    report+="CHARACTER_PREPARATION phase="+p.phase+" resources="+std::to_string(p.completed)+"/"+std::to_string(p.total)+" reused="+std::to_string(p.reused)+
+                        " source-bytes="+std::to_string(p.source_bytes_processed)+" catalogue-bytes="+std::to_string(p.catalogue_source_bytes)+" output-bytes="+std::to_string(p.output_bytes)+" game-ready=false\n";
+                    auto phase=env->NewStringUTF(p.phase.c_str());if(!phase)return false;
+                    const bool more=env->CallBooleanMethod(listener,method,phase,jint(p.completed),jint(p.total),jint(p.reused),jlong(p.source_bytes_processed),jlong(p.catalogue_source_bytes),jlong(p.output_bytes));
+                    env->DeleteLocalRef(phase);if(env->ExceptionCheck()){env->ExceptionClear();return false;}return more;
+                };
+                ok=tenkaichi::prepareCharacterResources(root,profile,tenkaichi::character0Sources,observer,error);
+                if(ok){tenkaichi::Engine engine;tenkaichi::EntityId entity;
+                    ok=engine.openPreparedCharacter(root,profile,tenkaichi::character0Sources,error);
+                    if(ok){engine.scene().each([&](tenkaichi::EntityId id,const tenkaichi::Entity& e){if(e.animator)entity=id;});
+                        report+="CACHE_SCENE native-records-to-shared-engine\n";
+                        ok=tenkaichi::probeCharacterScene(engine,entity,report,error);
+                    }
+                }
+                if(!ok)report+="ERROR prepared-character-scene: "+error+"\n";
+            }
+        }
     }catch(const std::exception& e){error=e.what();}
     Bt4Iso_Unmount();if(report.empty())report="ERROR "+error+"\n";
     report="profile="+profile+"\n"+report;

@@ -1,5 +1,6 @@
 #include "tenkaichi/inspection.hpp"
 #include "tenkaichi/animation.hpp"
+#include "tenkaichi/character_content.hpp"
 #include "tenkaichi/preparation.hpp"
 #include <sstream>
 namespace tenkaichi {
@@ -45,43 +46,31 @@ bool describeModel(Bytes model,Bytes textures,std::string& report,std::string& e
     report=out.str();return true;
 }
 bool inspectCharacter0(std::string& report,std::string& error){
-    report="BT4 character-0 metadata investigation v1; no conversion/gameplay claim\n";error.clear();
-    const Resource candidates[]={
-        {"pzs4us2/02250.bin",0x04a30b50u,759808},
-        {"pzs4us2/01750.bin",0xd7db4ba9u,1058816},
-        {"pzs4us2/02000.bin",0x52f63b48u,718848}};
-    bool complete=true;
-    for(unsigned i=0;i<3;++i){
-        const auto& r=candidates[i];std::vector<std::uint8_t> data;std::string issue;
-        report+="resource="+std::string(r.path)+"\n";
-        if(!readVerifiedResource(r,data,issue)){report+="ERROR "+issue+"\n";complete=false;continue;}
-        report+="verified-source-bytes="+std::to_string(data.size())+" sha256="+sha256({data.data(),data.size()})+"\n";
-        Bytes primary{nullptr,0},textures{nullptr,0};
-        if(!packEntry({data.data(),data.size()},i==0?3:1,primary,issue)||!primary.data){
-            report+="ERROR "+(issue.empty()?"required entry is empty":issue)+"\n";complete=false;continue;
-        }
-        if(i==0){std::string layout;
-            if(!packEntry({data.data(),data.size()},12,textures,issue)||!describeModel(primary,textures,layout,issue)){
-                report+="ERROR "+issue+"\n";complete=false;
-            }else report+=layout;
-        }else {
-            // BtlObjAnim_Load decompresses motions in file[1]. File[2] has
-            // other object tables; report its entry without guessing a codec.
-            report+="entry-1-bytes="+std::to_string(primary.size)+"\n";
-            if(i==1){AnimationClip clip;
-                if(!decodePackedAnimation(primary,clip,issue)){report+="ERROR native-motion-conversion: "+issue+"\n";complete=false;}
-                else {
-                    std::size_t tracks=0,keys=0;for(const auto& track:clip.tracks)if(track){++tracks;keys+=track->keys.size();}
-                    LocalPose pose;const bool sampled=sampleAnimationNode(clip,0,0,{0,0,0},pose);
-                    report+="native-motion-last-frame="+std::to_string(clip.last_frame)+" events="+std::to_string(clip.events.size())+
-                        " animated-nodes="+std::to_string(tracks)+" node-key-references="+std::to_string(keys)+" sample-node0-frame0="+(sampled?"passed":"failed")+
-                        "; motion converted in owned memory; no skeleton binding, retargeting, mesh or gameplay\n";
-                }
-            }
-        }
+    report="BT4 native integrated-scene probe v2; metadata only, no mesh/gameplay claim\n";error.clear();
+    const Resource sources[]={character0Sources.model,character0Sources.motion_a,character0Sources.motion_b};
+    std::array<std::vector<std::uint8_t>,3> bytes;bool complete=true;
+    for(unsigned i=0;i<3;++i){std::string issue;
+        report+="source="+std::string(sources[i].path)+"\n";
+        if(!readVerifiedResource(sources[i],bytes[i],issue)){complete=false;report+="ERROR source: "+issue+"\n";continue;}
+        report+="verified-bytes="+std::to_string(bytes[i].size())+" sha256="+sha256({bytes[i].data(),bytes[i].size()})+"\n";
+        Bytes entry{},textures{};
+        if(!packEntry({bytes[i].data(),bytes[i].size()},i?1:3,entry,issue)){complete=false;report+="ERROR pack: "+issue+"\n";continue;}
+        if(!i){std::string description;
+            if(!packEntry({bytes[i].data(),bytes[i].size()},12,textures,issue)||!describeModel(entry,textures,description,issue)){complete=false;report+="ERROR model-header: "+issue+"\n";}
+            else report+=description;
+            if(!describeCharacterStreams(entry,description,issue))report+="VIF-PENDING: "+issue+"\n";
+            report+=description;
+    }else report+="entry-1-bytes="+std::to_string(entry.size)+(i==2?"; motion-B codec remains unimplemented\n":"; primary motion decoded below\n");
     }
-    report+="BLOCKED: native vertex attributes/indices, skin weights, bind pose, material semantics, skeleton binding and motion retargeting remain unimplemented.\n";
-    if(!complete)error="Some resource metadata could not be inspected; see native-format-inspection.txt";
+    CharacterFoundation character;std::string issue;
+    if(bytes[0].empty()||bytes[1].empty()||!decodeCharacterFoundation({bytes[0].data(),bytes[0].size()},{bytes[1].data(),bytes[1].size()},character,issue)){
+        report+="ERROR character-foundation: "+issue+"\n";error=issue.empty()?"Required character source unavailable":issue;return false;
+    }
+    report+=character.metadata;
+    Engine engine;const auto entity=attachCharacterFoundation(engine,character,issue);
+    if(!entity||!probeCharacterScene(engine,entity,report,issue)){report+="ERROR integrated-scene: "+issue+"\n";error=issue;return false;}
+    for(const auto& missing:engine.gameReadiness().missing)report+="BLOCKED: "+missing+"\n";
+    if(!complete)error="Some source/header metadata failed; see diagnostic before continuing";
     return complete;
 }
 }

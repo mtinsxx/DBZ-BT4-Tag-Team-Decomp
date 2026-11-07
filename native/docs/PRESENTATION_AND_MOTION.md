@@ -123,3 +123,13 @@ incluem respostas analíticas de interpolação, todos os índices de quaternion
 aliases, eventos, truncamento de cada byte, campos desconhecidos e erros.
 O build ARM64 com --no-undefined e o empacotamento passam. Nenhum teste automatizado
 é apresentado como teste físico do Android/Vulkan ou animação real do BT4.
+
+## Continuidade 0.8
+
+[ENGINE_INTEGRATION.md](ENGINE_INTEGRATION.md) registra a ligação dos canais por
+ID, hierarquia, matrizes locais/globais, transições/layer secundário, relógio
+30 Hz e entrega de eventos/volumes. Skeleton/clip agora possuem schema/cache
+próprios e são carregados pela cena comum. IDs repetidos continuam explicitamente
+não suportados até resolver sua semântica, e rest inverses não são bind proof.
+Não há animação visual 3D nem reconstrução de combate; o renderer de apresentação
+e o decoder BPE/CLUT validado permanecem preservados.

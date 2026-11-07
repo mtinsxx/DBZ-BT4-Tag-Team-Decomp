@@ -20,6 +20,7 @@ Quaternion slerp(Quaternion a,Quaternion b,float t){
     return {a.x*ka+b.x*kb,a.y*ka+b.y*kb,a.z*ka+b.z*kb,a.w*ka+b.w*kb};
 }
 }
+Quaternion interpolateRotation(Quaternion a,Quaternion b,float weight){return slerp(a,b,weight);}
 bool unpackQuaternion(std::uint64_t packed,Quaternion& out){
     out={};const auto largest=unsigned(packed>>60);if(largest>3)return false;
     float v[4]={},sum=0;

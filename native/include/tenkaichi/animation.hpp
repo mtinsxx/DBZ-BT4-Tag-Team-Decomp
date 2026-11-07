@@ -20,6 +20,7 @@ struct LocalPose { Vec3 translation;Quaternion rotation; };
 // Disk values are explicit little-endian. No PS2 runtime structures/pointers.
 bool decodeAnimation(Bytes raw,AnimationClip& clip,std::string& error);
 bool decodePackedAnimation(Bytes packed,AnimationClip& clip,std::string& error);
+Quaternion interpolateRotation(Quaternion a,Quaternion b,float weight);
 bool unpackQuaternion(std::uint64_t value,Quaternion& out);
 // Missing track uses rest pose. Multi-key out-of-range behavior follows the
 // original sampler (zero translation/identity), rather than clamping silently.

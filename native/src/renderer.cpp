@@ -125,7 +125,15 @@ static bool capture(Gpu& gpu) {
     SDL_ReleaseGPUTransferBuffer(gpu.device,transfer);
     return ok && std::rename("native-first-frame.png.tmp","native-first-frame.png")==0;
 }
-int renderResource(const Image& image) {
+int renderEngine(Engine& engine) {
+    SceneFrame initial;std::string engineError;
+    if(!engine.frame(initial,engineError)||initial.images.size()!=1||!initial.poses.empty()){
+        status("ERROR",engineError.empty()?"Presentation adapter requires one prepared image; native mesh rendering remains unavailable":engineError);return 2;
+    }
+    auto presentationTransform=[](const Matrix4& matrix){for(unsigned i=0;i<4;++i)for(unsigned j=0;j<4;++j)if(matrix.m[i][j]!=(i==j?1.0f:0.0f))return false;return true;};
+    if(!presentationTransform(initial.images.front().world)){status("ERROR","World-space image transform requires a scene renderer beyond the preserved presentation adapter");return 2;}
+    const auto resource=initial.images.front().resource;
+    const auto imageLease=initial.images.front().image;const auto& image=*imageLease;
     Gpu gpu;auto fail=[&](const char* operation){status("ERROR",std::string(operation)+": "+SDL_GetError());return 2;};
     if(image.width!=256||image.height!=512||image.rgba.size()!=256*512*4){status("ERROR","Invalid native image contract");return 2;}
     if(!SDL_SetHintWithPriority(SDL_HINT_ORIENTATIONS,"LandscapeLeft LandscapeRight",SDL_HINT_OVERRIDE))return fail("landscape orientation policy");
@@ -155,11 +163,14 @@ int renderResource(const Image& image) {
     if(!verifyPixels(gpu,image))return fail("native-size texture/shader pixel comparison");
     status("UPLOADED","Native RGBA8 256x512 upload fence complete");
     bool first=true;bool running=true;bool recreate=false;
-    unsigned generation=0,mismatches=0;
+    unsigned generation=0,mismatches=0;Uint64 previousTickNs=SDL_GetTicksNS();
+    status("SCENE_READY","Integrated engine scene, immutable asset handles and rational 30 Hz clock; battle readiness remains blocked");
     while(running) {
         SDL_Event event;
         while(SDL_PollEvent(&event)) {
             if(event.type==SDL_EVENT_QUIT||(event.type==SDL_EVENT_KEY_DOWN&&event.key.key==SDLK_ESCAPE))running=false;
+            if(event.type==SDL_EVENT_WILL_ENTER_BACKGROUND){engine.suspend(true);previousTickNs=SDL_GetTicksNS();}
+            if(event.type==SDL_EVENT_DID_ENTER_FOREGROUND){engine.suspend(false);previousTickNs=SDL_GetTicksNS();}
             if(event.type==SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED||event.type==SDL_EVENT_WINDOW_RESIZED||
                event.type==SDL_EVENT_WINDOW_DISPLAY_CHANGED||event.type==SDL_EVENT_DISPLAY_ORIENTATION||
                event.type==SDL_EVENT_DID_ENTER_FOREGROUND) {
@@ -168,6 +179,13 @@ int renderResource(const Image& image) {
             }
         }
         if(!running)break;
+        const auto now=SDL_GetTicksNS();TickAdvance simulation;
+        if(!engine.advance(now-previousTickNs,simulation,engineError)){status("ERROR",engineError);return 2;}
+        previousTickNs=now;
+        SceneFrame scene;
+        if(!engine.frame(scene,engineError)||scene.images.size()!=1||scene.images.front().resource!=resource||!scene.poses.empty()||!presentationTransform(scene.images.front().world)){
+            status("ERROR",engineError.empty()?"Scene needs native mesh/multi-resource renderer not implemented by this presentation adapter":engineError);return 2;
+        }
         int logicalW=0,logicalH=0,pixelW=0,pixelH=0;
         if(!SDL_GetWindowSize(gpu.window,&logicalW,&logicalH)||!SDL_GetWindowSizeInPixels(gpu.window,&pixelW,&pixelH))return fail("drawable dimensions");
         if(pixelW<=0||pixelH<=0){SDL_Delay(16);continue;}

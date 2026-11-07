@@ -134,3 +134,15 @@ O proprietário confirmou o retrato original em paisagem na 0.6, com distorção
 em retrato. A 0.7 fixa a política Android/SDL, audita dimensões/viewport e
 acrescenta o primeiro decoder/sampler nativo de movimento, sem personagem 3D.
 Consulte [PRESENTATION_AND_MOTION.md](PRESENTATION_AND_MOTION.md).
+
+## Continuidade 0.8 — núcleo compartilhado
+
+A fundação agora conecta AssetLibrary, Scene, Animation e Simulation ao caminho
+Android/SDL. O renderer preservado recebe snapshots da Engine, mas continua um
+adaptador de imagem; rejeita cenas 3D ainda não suportadas. Preparação incremental
+de skeleton/clip e diagnóstico de reprodução CPU usam essa mesma arquitetura.
+Os detalhes de execução original, contratos, orçamentos, provas e lacunas estão
+em [ENGINE_INTEGRATION.md](ENGINE_INTEGRATION.md). As afirmações históricas acima
+sobre ausência de hierarquia/layers/eventos por tick descrevem o estado 0.7;
+essas partes foram implementadas em 0.8, sem estabelecer geometria/skinning ou
+combate completos. Os marcos A–F permanecem incompletos.

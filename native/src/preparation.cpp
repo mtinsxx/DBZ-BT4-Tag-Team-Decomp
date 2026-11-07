@@ -1,4 +1,5 @@
 #include "tenkaichi/preparation.hpp"
+#include "cache_io.hpp"
 #include <cerrno>
 #include <cstring>
 #include <fcntl.h>
@@ -9,44 +10,14 @@
 #include <unistd.h>
 namespace tenkaichi {
 namespace {
-struct Fd {
-    int n=-1;
-    explicit Fd(int value=-1):n(value){}
-    ~Fd(){if(n>=0)close(n);}
-    Fd(const Fd&)=delete;Fd& operator=(const Fd&)=delete;
-};
-[[noreturn]] void fail(const std::string& why){throw std::runtime_error(why+": "+std::strerror(errno));}
+using cache::Fd;using cache::fail;using cache::isHash;using cache::readFile;using cache::syncFile;
+using Store=cache::Directory;
 constexpr std::size_t outputBytes=256*512*4;
 constexpr std::uint64_t spaceReserve=8*1024*1024;
-struct Store {
-    Fd root,lock,base,dir;
-    Store(const std::string& path,const std::string& profile):
-        root(open(path.c_str(),O_RDONLY|O_DIRECTORY|O_CLOEXEC|O_NOFOLLOW)),
-        lock(root.n<0?-1:openat(root.n,"native-assets.lock",O_CREAT|O_RDWR|O_CLOEXEC|O_NOFOLLOW,0600)) {
-        if(root.n<0||lock.n<0)fail("Cache lock open");
-        if(flock(lock.n,LOCK_EX|LOCK_NB))fail("Cache busy (preparation/viewer/cleanup)");
-        if(mkdirat(root.n,"native-assets-v1",0700)&&errno!=EEXIST)fail("Cache directory create");
-        base.n=openat(root.n,"native-assets-v1",O_RDONLY|O_DIRECTORY|O_CLOEXEC|O_NOFOLLOW);
-        if(base.n<0)fail("Cache directory open");
-        if(profile!="ENG"&&profile!="ESP")throw std::runtime_error("Cache requires verified ENG/ESP profile");
-        if(mkdirat(base.n,profile.c_str(),0700)&&errno!=EEXIST)fail("Cache profile create");
-        dir.n=openat(base.n,profile.c_str(),O_RDONLY|O_DIRECTORY|O_CLOEXEC|O_NOFOLLOW);
-        if(dir.n<0)fail("Cache profile open");
-        if(fsync(base.n)||fsync(root.n))fail("Cache directory sync");
-    }
-};
 std::string manifestPrefix(const std::string& profile,const Resource& resource){
     return "TENKAICHI_NATIVE_CACHE\nschema=1\nconverter=bt4-portrait-rgba8-v1\ncatalogue=BT4-B14-Rev2\nprofile="+profile+
         "\nsource="+resource.path+"\nsource-crc32="+std::to_string(resource.crc)+"\nsource-bytes="+std::to_string(resource.bytes)+
         "\nrequired-resource-set=portrait-feasibility-v1\nwidth=256\nheight=512\nformat=RGBA8_UNORM\noutput-bytes=524288\ngame-ready=false\nsource-sha256=";
-}
-bool isHash(const std::string& hash){return hash.size()==64&&hash.find_first_not_of("0123456789abcdef")==std::string::npos;}
-bool readFile(int dir,const char* name,std::size_t maximum,std::vector<std::uint8_t>& out){
-    out.clear();Fd file(openat(dir,name,O_RDONLY|O_CLOEXEC|O_NOFOLLOW));struct stat st{};
-    if(file.n<0||fstat(file.n,&st)||!S_ISREG(st.st_mode)||st.st_size<0||std::uint64_t(st.st_size)>maximum)return false;
-    out.resize(std::size_t(st.st_size));std::size_t at=0;
-    while(at<out.size()) {auto n=read(file.n,out.data()+at,out.size()-at);if(n<0&&errno==EINTR)continue;if(n<=0){out.clear();return false;}at+=std::size_t(n);}
-    return true;
 }
 bool valid(int dir,const std::string& profile,const Resource& resource,Image& image){
     image={};std::vector<std::uint8_t> record,pixels;
@@ -59,16 +30,6 @@ bool valid(int dir,const std::string& profile,const Resource& resource,Image& im
     if(text!=body+"manifest-sha256="+sha256({reinterpret_cast<const std::uint8_t*>(body.data()),body.size()})+"\n")return false;
     image.width=256;image.height=512;image.source_crc=resource.crc;image.source_bytes=resource.bytes;
     image.source_sha256=sourceHash;image.rgba=std::move(pixels);return true;
-}
-void syncFile(int dir,const char* name,Bytes bytes){
-    const std::string temporary=std::string(name)+".tmp";
-    // Remove only our fixed temporary name; never follow a stale symlink.
-    if(unlinkat(dir,temporary.c_str(),0)&&errno!=ENOENT)fail("Cache temporary cleanup");
-    Fd fd(openat(dir,temporary.c_str(),O_WRONLY|O_CREAT|O_EXCL|O_NOFOLLOW|O_CLOEXEC,0600));
-    if(fd.n<0)fail("Cache temporary open");
-    std::size_t at=0;
-    while(at<bytes.size){auto n=write(fd.n,bytes.data+at,bytes.size-at);if(n<0&&errno==EINTR)continue;if(n<=0)fail("Cache write");at+=std::size_t(n);}
-    if(fsync(fd.n)||renameat(dir,temporary.c_str(),dir,name)||fsync(dir))fail("Cache durable commit");
 }
 void checkResource(const Resource& r){
     if(!r.path||std::string(r.path)!="pzs4us1/01819.bin"||!r.bytes||r.bytes>1024*1024)throw std::runtime_error("No proven converter for requested resource");
@@ -118,6 +79,7 @@ bool clearPreparedResources(const std::string& root,std::string& error){
                 if(unlinkat(dir.n,name,0)&&errno!=ENOENT)fail("Cache cleanup");
             if(fsync(dir.n))fail("Cache cleanup sync");
         }
+        cache::clearNativeRecordsAtRoot(store.root.n);
         return true;
     }catch(const std::exception& e){error=e.what();return false;}
 }

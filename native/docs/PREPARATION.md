@@ -134,3 +134,45 @@ Os 18 testes herdados passam após a alteração no leitor. O alvo novo tem link
 ARM64 --no-undefined. Não há execução Android/driver/SAF físico no cloud nem
 conversão comprovada de bytes comerciais nesta sessão. Somente o proprietário
 pode confirmar a conversão real e o quadro no Galaxy S24 FE.
+
+## Extensão 0.8: registros nativos por recurso
+
+O contrato do retrato acima permanece válido. A implementação comum de IO foi
+extraída para cache_io sem trocar os nomes, versão ou algoritmo BPE/CLUT.
+O conjunto adicional **character-foundation-v1 tem dois recursos suportados**:
+esqueleto do modelo entry3 e primeiro clip de motion A entry1. Não é o conjunto
+obrigatório do jogo; motion B, geometria, materiais e restante continuam ausentes.
+
+Local: `filesDir/native-records-v1/{ENG,ESP}`. A chave SHA-256 inclui locator,
+tamanho/CRC do catálogo e versão do conversor. Manifesto canônico v1 verifica
+identidade, SHA dos bytes realmente convertidos, SHA/bytes da saída e SHA do
+manifesto. O próprio perfil está no diretório; ENG/ESP não compartilham commits.
+Hashes detectam corrupção, não autenticam contra o dono do sandbox. A entrada
+JNI continua validando os três programas da ISO antes da preparação.
+
+Payloads `.native` usam TNSK/TNAC v1, LE e IEEE float32 explícitos: sem salvar
+ponteiros, containers C++, padding de structs ou endereços PS2. Skeleton guarda
+IDs/parents/rest translation/origin; matrizes são reconstruídas. Clip guarda
+tracks/aliases, flags, chaves e eventos. Cada schema limita contagens/tamanhos e
+rejeita payload corrompido mesmo com manifesto íntegro. Bind space não é marcado
+como validado só por conseguir calcular uma inversa de rest pose.
+
+Cada recurso é validado e confirmado independentemente. Ausente/corrompido/
+conversor novo reconstrói somente aquele registro. Temporário no-follow, fsync,
+rename, manifesto por último e read-back usam o mesmo lock global do cache
+anterior. Morte após o primeiro commit permite retomá-lo sem converter novamente.
+Reuso dos dois registros não lê seus membros na ISO; o diagnóstico opcional faz
+inspeção fresca separada e informa que seus bytes não entram no contador de
+preparação. Contadores são deste subconjunto, não porcentagem do jogo.
+
+Limites por perfil: 256 MiB/8192 arquivos pertencentes ao cache; payload máximo
+16 MiB, reserva livre de 8 MiB. A pré-verificação ocorre ANTES de converter com
+limite superior conservador (4 KiB esqueleto; 16 MiB clip); pode exigir mais espaço
+que o payload final. Não há eviction ou redução de qualidade silenciosa. Limpeza
+reconhece somente nomes SHA64 + extensões próprias nos dois perfis; preserva
+arquivos externos e ISO. Agora a mesma ação de limpar/reconstruir remove também
+os registros novos; reconstruir o retrato não declara preparar o personagem.
+
+Exportação inclui somente até 64 manifestos de até 4096 bytes por perfil, além
+de metadados e captura já existente. Não exporta `.native`, modelos, movimento
+ou ISO. O probe e seus limites estão em [ENGINE_INTEGRATION.md](ENGINE_INTEGRATION.md).
