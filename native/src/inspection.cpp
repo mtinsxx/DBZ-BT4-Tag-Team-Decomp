@@ -1,4 +1,5 @@
 #include "tenkaichi/inspection.hpp"
+#include "tenkaichi/animation.hpp"
 #include "tenkaichi/preparation.hpp"
 #include <sstream>
 namespace tenkaichi {
@@ -40,7 +41,7 @@ bool describeModel(Bytes model,Bytes textures,std::string& report,std::string& e
             out<<"texture="<<i<<" pixel-packet-offset="<<pix<<" bytes="<<pixSize<<" clut-packet-offset="<<clut<<" bytes="<<clutSize<<"\n";
         }
     }else out<<"texture-entry=empty\n";
-    out<<"geometry-converted=false skeleton-converted=false materials-converted=false animation-converted=false\n";
+    out<<"model-geometry-converted=false skeleton-bound=false materials-converted=false\n";
     report=out.str();return true;
 }
 bool inspectCharacter0(std::string& report,std::string& error){
@@ -67,15 +68,19 @@ bool inspectCharacter0(std::string& report,std::string& error){
             // BtlObjAnim_Load decompresses motions in file[1]. File[2] has
             // other object tables; report its entry without guessing a codec.
             report+="entry-1-bytes="+std::to_string(primary.size)+"\n";
-            if(i==1){std::vector<std::uint8_t> motion;
-                if(!decodeBpe(primary,motion,issue)){report+="ERROR first-motion BPE: "+issue+"\n";complete=false;}
-                else if(motion.size()<0x94){report+="ERROR first-motion shorter than animation header\n";complete=false;}
-                else report+="first-motion-raw-bytes="+std::to_string(motion.size())+" duration-last-frame="+
-                    std::to_string(u16(motion.data()+2))+" event-count="+std::to_string(motion[1])+"; tracks/skinning not converted\n";
+            if(i==1){AnimationClip clip;
+                if(!decodePackedAnimation(primary,clip,issue)){report+="ERROR native-motion-conversion: "+issue+"\n";complete=false;}
+                else {
+                    std::size_t tracks=0,keys=0;for(const auto& track:clip.tracks)if(track){++tracks;keys+=track->keys.size();}
+                    LocalPose pose;const bool sampled=sampleAnimationNode(clip,0,0,{0,0,0},pose);
+                    report+="native-motion-last-frame="+std::to_string(clip.last_frame)+" events="+std::to_string(clip.events.size())+
+                        " animated-nodes="+std::to_string(tracks)+" node-key-references="+std::to_string(keys)+" sample-node0-frame0="+(sampled?"passed":"failed")+
+                        "; motion converted in owned memory; no skeleton binding, retargeting, mesh or gameplay\n";
+                }
             }
         }
     }
-    report+="BLOCKED: native vertex attributes/indices, skin weights, bind pose, material semantics and animation channel conversion remain unimplemented.\n";
+    report+="BLOCKED: native vertex attributes/indices, skin weights, bind pose, material semantics, skeleton binding and motion retargeting remain unimplemented.\n";
     if(!complete)error="Some resource metadata could not be inspected; see native-format-inspection.txt";
     return complete;
 }

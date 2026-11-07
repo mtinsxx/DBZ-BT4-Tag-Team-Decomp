@@ -127,3 +127,10 @@ A versão 0.6 implementa o índice de setores BT4 em DBZ4.BIN, ausente no reader
 clássico reaproveitado na 0.5, cache transacional e investigação de metadados
 do primeiro modelo. Consulte [PREPARATION.md](PREPARATION.md) para a correção,
 contratos de integridade/retomada e bloqueios 3D. O jogo continua incompleto.
+
+## Continuidade 0.7
+
+O proprietário confirmou o retrato original em paisagem na 0.6, com distorção
+em retrato. A 0.7 fixa a política Android/SDL, audita dimensões/viewport e
+acrescenta o primeiro decoder/sampler nativo de movimento, sem personagem 3D.
+Consulte [PRESENTATION_AND_MOTION.md](PRESENTATION_AND_MOTION.md).

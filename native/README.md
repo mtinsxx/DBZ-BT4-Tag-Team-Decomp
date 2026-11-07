@@ -3,6 +3,8 @@
 O alvo C++ ARM64 é compilado antecipadamente no APK, sem compilar ou executar
 código PS2 no Android. A versão 0.6 prepara o retrato original em cache privado,
 com manifesto versionado/hashes, e o renderer Vulkan consome esse cache.
+A versão 0.7 fixa paisagem e acrescenta conversão/amostragem de movimento
+na investigação de recursos. Consulte [PRESENTATION_AND_MOTION.md](docs/PRESENTATION_AND_MOTION.md).
 O jogo completo ainda não está implementado; INICIAR JOGO permanece bloqueado.
 
 Consulte [PREPARATION.md](docs/PREPARATION.md) para o índice DBZ4, recuperação,
@@ -35,8 +37,9 @@ nativo. Campos de 32 bits existem apenas como formato no disco.
 
 O shader desenha uma superfície de apresentação com a textura original e
 preserva sua proporção/alpha. Essa superfície **não é geometria de personagem**.
-Modelos 3D, esqueletos, animações, materiais 3D, combate e menus do jogo não
-estão implementados neste alvo. O teste não serve para declarar BT4 funcional.
+Modelos 3D, esqueletos vinculados, animação visual, materiais 3D, combate e menus
+do jogo não estão implementados neste alvo. Há um decoder/sampler de movimento
+nativo, ainda sem vinculação ao personagem. O teste não serve para declarar BT4 funcional.
 
 A preparação registra VERIFYING/CONVERTED/RESOURCE_READY_GAME_INCOMPLETE.
 O renderer registra ENGINE_READY, CACHE_VALID, VULKAN, SUBMITTED ou
@@ -94,3 +97,7 @@ A próxima etapa depende desse resultado: confirmar o recurso e então converter
 um modelo real com mesh, esqueleto e animação comprovados. Consulte
 [viabilidade e migração](docs/ARCHITECTURE.md) para formatos, candidatos concretos
 e plano de preservação da jogabilidade.
+
+O proprietário confirmou apresentação do retrato em paisagem na versão 0.6;
+ela é evidência do recurso no Galaxy, não de gameplay. A correção da orientação
+0.7 e a conversão do primeiro movimento real ainda precisam de teste físico.
